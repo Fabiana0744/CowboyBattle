@@ -29,6 +29,12 @@ RADIO_IMPACTO = 25  # "hitbox" de impacto
 # Puntuación: player_id -> cantidad de impactos a otros jugadores
 puntuacion = defaultdict(int)
 
+# Estado de la partida: "lobby", "jugando", "game_over"
+estado_partida = "lobby"
+
+# Jugadores listos en la sala: player_id -> bool
+jugadores_listos = defaultdict(bool)
+
 # Contador para asignar player_id únicos
 siguiente_player_id = 1
 
@@ -64,12 +70,20 @@ async def enviar_estado_a_todos():
         await asyncio.gather(*tareas, return_exceptions=True)
 
 
+async def enviar_evento_a_todos(evento: dict):
+    """Envía un evento (mensaje corto) a todos los jugadores."""
+    if jugadores:
+        mensaje = json.dumps(evento)
+        tareas = [ws.send(mensaje) for ws in jugadores.keys()]
+        await asyncio.gather(*tareas, return_exceptions=True)
+
+
 async def actualizar_balas():
     """
     Actualiza la posición de todas las balas, detecta impactos y
     elimina las que salen de la pantalla o golpean a un jugador.
     """
-    global balas, estado, puntuacion
+    global balas, estado, puntuacion, estado_partida
     
     # Dimensiones de la pantalla (deben coincidir con el cliente)
     ANCHO_PANTALLA = 800
@@ -100,6 +114,17 @@ async def actualizar_balas():
                 print(f"💥 Impacto! Jugador {owner_id} golpea a {pid}")
                 puntuacion[owner_id] += 1
                 balas_a_eliminar.append(bala_id)
+                
+                # Verificar si owner_id ya ganó (3 impactos)
+                if puntuacion[owner_id] >= 3 and estado_partida == "jugando":
+                    estado_partida = "game_over"
+                    
+                    await enviar_evento_a_todos({
+                        "tipo": "game_over",
+                        "ganador": owner_id,
+                        "puntuacion": dict(puntuacion)
+                    })
+                
                 break  # Ya no seguimos revisando esta bala
     
     # Eliminar balas marcadas
@@ -114,7 +139,7 @@ async def manejar_cliente(websocket: Any):
     Args:
         websocket: Objeto WebSocket del cliente conectado
     """
-    global siguiente_player_id, siguiente_bala_id, estado, balas
+    global siguiente_player_id, siguiente_bala_id, estado, balas, estado_partida
     
     print("Cliente conectado (esperando mensaje 'join')")
     
@@ -140,6 +165,9 @@ async def manejar_cliente(websocket: Any):
                         "nombre": nombre
                     }
                     
+                    # Recién entra, aún no está listo
+                    jugadores_listos[player_id] = False
+                    
                     print(f"Jugador registrado: {nombre} (ID: {player_id})")
                     
                     # Asignar posición inicial diferente según el player_id
@@ -162,11 +190,82 @@ async def manejar_cliente(websocket: Any):
                     }
                     await websocket.send(json.dumps(mensaje_respuesta))
                     
+                    # Enviar estado de la sala al nuevo jugador
+                    await enviar_evento_a_todos({
+                        "tipo": "estado_sala",
+                        "estado_partida": estado_partida,
+                        "jugadores": {
+                            pid: {
+                                "nombre": info["nombre"],
+                                "listo": jugadores_listos[pid]
+                            }
+                            for _, info in jugadores.items()
+                            for pid in [info["id"]]
+                        }
+                    })
+                    
                     # Enviar el estado actual a todos los jugadores (incluido el nuevo)
                     await enviar_estado_a_todos()
                 
-                # Procesar mensaje de disparo
+                # Procesar mensaje de "ready"
+                elif datos.get("tipo") == "ready":
+                    player_id_ready = datos.get("player_id")
+                    listo = datos.get("listo", False)
+                    
+                    if websocket in jugadores and jugadores[websocket]["id"] == player_id_ready:
+                        jugadores_listos[player_id_ready] = bool(listo)
+                        print(f"Jugador {player_id_ready} cambió estado listo a {listo}")
+                        
+                        # Avisar a todos cómo está la sala
+                        await enviar_evento_a_todos({
+                            "tipo": "estado_sala",
+                            "estado_partida": estado_partida,
+                            "jugadores": {
+                                pid: {
+                                    "nombre": info["nombre"],
+                                    "listo": jugadores_listos[pid]
+                                }
+                                for _, info in jugadores.items()
+                                for pid in [info["id"]]
+                            }
+                        })
+                        
+                        # Verificar si todos los jugadores conectados están listos para empezar
+                        if estado_partida == "lobby":
+                            # Tomamos todos los IDs actuales
+                            ids_actuales = [info["id"] for info in jugadores.values()]
+                            if ids_actuales and all(jugadores_listos[pid] for pid in ids_actuales) and len(ids_actuales) >= 2:
+                                # Resetear puntuación y posiciones
+                                for pid in ids_actuales:
+                                    puntuacion[pid] = 0
+                                    if pid == 1:
+                                        estado[pid] = {"x": 200, "y": 300}
+                                    elif pid == 2:
+                                        estado[pid] = {"x": 600, "y": 300}
+                                    else:
+                                        estado[pid] = {"x": 400, "y": 300}
+                                
+                                # Limpiar balas
+                                balas.clear()
+                                
+                                # Cambiar estado de partida
+                                estado_partida = "jugando"
+                                
+                                # Avisar a todos que empieza la partida
+                                await enviar_evento_a_todos({
+                                    "tipo": "start_game",
+                                    "estado_partida": estado_partida,
+                                    "puntuacion": dict(puntuacion)
+                                })
+                                # Y mandar un estado inicial
+                                await enviar_estado_a_todos()
+                
+                # Procesar mensaje de disparo (solo en estado "jugando")
                 elif datos.get("tipo") == "shoot":
+                    # Solo permitir disparos si estamos jugando
+                    if estado_partida != "jugando":
+                        print(f"Disparo ignorado - El juego no está en estado 'jugando' (estado: {estado_partida})")
+                        continue
                     player_id_shoot = datos.get("player_id")
                     direccion = datos.get("direccion", "up")
                     
@@ -224,8 +323,12 @@ async def manejar_cliente(websocket: Any):
                     else:
                         print(f"Disparo recibido de jugador no registrado o ID incorrecto (ID: {player_id_shoot})")
                 
-                # Procesar mensaje de actualización de posición
+                # Procesar mensaje de actualización de posición (solo en estado "jugando")
                 elif datos.get("tipo") == "update_pos":
+                    # Solo permitir actualizaciones de posición si estamos jugando
+                    if estado_partida != "jugando":
+                        continue
+                    
                     player_id = datos.get("player_id")
                     x = datos.get("x")
                     y = datos.get("y")
@@ -235,11 +338,6 @@ async def manejar_cliente(websocket: Any):
                         # Actualizar el estado del jugador (sin enviar estado inmediatamente)
                         # El loop de actualización de balas se encargará de enviar el estado periódicamente
                         estado[player_id] = {"x": x, "y": y}
-                        
-                        # Solo imprimir ocasionalmente para no saturar la consola
-                        # (comentado para reducir overhead)
-                        # jugador_info = jugadores[websocket]
-                        # print(f"Posición actualizada - Jugador {jugador_info['nombre']} (ID: {player_id}): ({x}, {y})")
                     else:
                         print(f"Posición recibida de jugador no registrado o ID incorrecto (ID: {player_id}): ({x}, {y})")
                     
@@ -290,14 +388,22 @@ async def loop_actualizacion_balas():
     """
     Loop que actualiza las balas periódicamente y envía el estado a todos los clientes.
     Optimizado para VPN: envía estado a ~30 FPS (cada 33ms) en lugar de 60 FPS.
+    Durante la partida: ~60 FPS para movimiento fluido.
     """
     while True:
-        await asyncio.sleep(0.033)  # ~30 FPS (mejor para VPN con latencia)
-        # Actualizar balas si existen
-        if balas:
-            await actualizar_balas()
-        # Enviar estado periódicamente (incluso si no hay balas, para sincronizar posiciones)
-        await enviar_estado_a_todos()
+        # Durante la partida, actualizar más frecuentemente para movimiento fluido
+        if estado_partida == "jugando":
+            await asyncio.sleep(0.016)  # ~60 FPS durante partida
+            # Actualizar balas si existen
+            if balas:
+                await actualizar_balas()
+            # Enviar estado frecuentemente durante partida
+            await enviar_estado_a_todos()
+        else:
+            # En lobby/game_over, actualizar menos frecuentemente
+            await asyncio.sleep(0.033)  # ~30 FPS en otros estados
+            # Enviar estado periódicamente (para sincronizar estado del juego)
+            await enviar_estado_a_todos()
 
 
 async def main():
