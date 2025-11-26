@@ -9,6 +9,7 @@ import websockets
 import pygame
 import sys
 import math
+import time
 from typing import Dict
 
 # Configuración de Pygame
@@ -50,7 +51,11 @@ async def cliente():
     
     # Control de disparo: solo permitir un disparo a la vez
     puede_disparar = True  # Flag para controlar si puede disparar
-    tecla_disparo_presionada_anterior = False  # Para detectar cuando se suelta la tecla
+    ultima_direccion_movimiento = "up"  # Dirección del último movimiento
+    
+    # Throttling de actualizaciones de posición (solo enviar cada X ms)
+    INTERVALO_ACTUALIZACION_POS = 0.05  # 50ms = 20 actualizaciones por segundo (mejor para VPN)
+    ultimo_envio_posicion = 0
     
     # Inicializar Pygame
     pygame.init()
@@ -82,13 +87,23 @@ async def cliente():
             
             # Loop principal: combina Pygame y WebSocket
             corriendo = True
+            disparo_solicitado = False
+            direccion_disparo = ultima_direccion_movimiento
+            
             while corriendo:
-                # Procesar eventos de Pygame
+                # Procesar eventos de Pygame (una sola vez)
                 for evento in pygame.event.get():
                     if evento.type == pygame.QUIT:
                         corriendo = False
+                    # Detectar disparo usando eventos KEYDOWN (más confiable)
+                    elif evento.type == pygame.KEYDOWN:
+                        if (evento.key == pygame.K_SPACE or evento.key == pygame.K_j) and puede_disparar and player_id is not None:
+                            disparo_solicitado = True
+                            puede_disparar = False  # Bloquear nuevos disparos hasta que la bala desaparezca
+                            # Usar la última dirección de movimiento
+                            direccion_disparo = ultima_direccion_movimiento
                 
-                # Obtener teclas presionadas
+                # Obtener teclas presionadas para movimiento continuo
                 teclas = pygame.key.get_pressed()
                 
                 # Mover el jugador con WASD o flechas
@@ -97,12 +112,16 @@ async def cliente():
                 
                 if teclas[pygame.K_w] or teclas[pygame.K_UP]:
                     movimiento_y = -VELOCIDAD_MOVIMIENTO
+                    ultima_direccion_movimiento = "up"
                 if teclas[pygame.K_s] or teclas[pygame.K_DOWN]:
                     movimiento_y = VELOCIDAD_MOVIMIENTO
+                    ultima_direccion_movimiento = "down"
                 if teclas[pygame.K_a] or teclas[pygame.K_LEFT]:
                     movimiento_x = -VELOCIDAD_MOVIMIENTO
+                    ultima_direccion_movimiento = "left"
                 if teclas[pygame.K_d] or teclas[pygame.K_RIGHT]:
                     movimiento_x = VELOCIDAD_MOVIMIENTO
+                    ultima_direccion_movimiento = "right"
                 
                 # Actualizar posición
                 x += movimiento_x
@@ -111,29 +130,6 @@ async def cliente():
                 # Mantener el jugador dentro de los límites de la ventana
                 x = max(TAMAÑO_CUADRADO // 2, min(ANCHO_VENTANA - TAMAÑO_CUADRADO // 2, x))
                 y = max(TAMAÑO_CUADRADO // 2, min(ALTO_VENTANA - TAMAÑO_CUADRADO // 2, y))
-                
-                # Detectar disparo (SPACE o J) - solo cuando se presiona la tecla, no mientras se mantiene
-                tecla_disparo_actual = teclas[pygame.K_SPACE] or teclas[pygame.K_j]
-                disparo_solicitado = False
-                direccion_disparo = "up"  # Por defecto hacia arriba
-                
-                # Solo disparar cuando se presiona la tecla (no mientras se mantiene)
-                if tecla_disparo_actual and not tecla_disparo_presionada_anterior and puede_disparar and player_id is not None:
-                    disparo_solicitado = True
-                    puede_disparar = False  # Bloquear nuevos disparos hasta que la bala desaparezca
-                    
-                    # Determinar dirección según el último movimiento o tecla presionada
-                    if teclas[pygame.K_w] or teclas[pygame.K_UP]:
-                        direccion_disparo = "up"
-                    elif teclas[pygame.K_s] or teclas[pygame.K_DOWN]:
-                        direccion_disparo = "down"
-                    elif teclas[pygame.K_a] or teclas[pygame.K_LEFT]:
-                        direccion_disparo = "left"
-                    elif teclas[pygame.K_d] or teclas[pygame.K_RIGHT]:
-                        direccion_disparo = "right"
-                
-                # Actualizar el estado de la tecla para el siguiente frame
-                tecla_disparo_presionada_anterior = tecla_disparo_actual
                 
                 # Enviar mensaje de disparo al servidor
                 if disparo_solicitado and player_id is not None:
@@ -144,8 +140,11 @@ async def cliente():
                     }
                     try:
                         await websocket.send(json.dumps(mensaje_shoot))
+                        print(f"💥 Disparo enviado: {direccion_disparo}")
+                        disparo_solicitado = False  # Resetear flag
                     except Exception as e:
                         print(f"Error al enviar disparo: {e}")
+                        disparo_solicitado = False  # Resetear flag incluso si falla
                 
                 # Verificar si el jugador ya no tiene balas activas (puede volver a disparar)
                 if not puede_disparar and player_id is not None:
@@ -159,23 +158,26 @@ async def cliente():
                     if not tiene_bala_activa:
                         puede_disparar = True
                 
-                # Si la posición cambió y ya tenemos el player_id, enviar actualización al servidor
+                # Throttling: Solo enviar actualización de posición cada X ms (reduce tráfico de red)
+                tiempo_actual = time.time()
                 if (x, y) != posicion_anterior and player_id is not None:
-                    mensaje_posicion = {
-                        "tipo": "update_pos",
-                        "player_id": player_id,
-                        "x": x,
-                        "y": y
-                    }
-                    try:
-                        await websocket.send(json.dumps(mensaje_posicion))
-                        posicion_anterior = (x, y)
-                    except Exception as e:
-                        print(f"Error al enviar posición: {e}")
+                    if tiempo_actual - ultimo_envio_posicion >= INTERVALO_ACTUALIZACION_POS:
+                        mensaje_posicion = {
+                            "tipo": "update_pos",
+                            "player_id": player_id,
+                            "x": x,
+                            "y": y
+                        }
+                        try:
+                            await websocket.send(json.dumps(mensaje_posicion))
+                            posicion_anterior = (x, y)
+                            ultimo_envio_posicion = tiempo_actual
+                        except Exception as e:
+                            print(f"Error al enviar posición: {e}")
                 
-                # Revisar si hay mensajes del servidor (con timeout muy corto para no bloquear)
+                # Revisar si hay mensajes del servidor (timeout aumentado para mejor recepción)
                 try:
-                    mensaje = await asyncio.wait_for(websocket.recv(), timeout=0.001)
+                    mensaje = await asyncio.wait_for(websocket.recv(), timeout=0.01)
                     try:
                         datos = json.loads(mensaje)
                         print(f"Mensaje recibido del servidor: {datos}")

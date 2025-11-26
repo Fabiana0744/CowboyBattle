@@ -225,8 +225,9 @@ async def manejar_cliente(websocket: Any):
                             jugador_info = jugadores[websocket]
                             print(f"Bala creada - Jugador {jugador_info['nombre']} (ID: {player_id_shoot}) disparó hacia {direccion}")
                             
-                            # Actualizar estado de balas y enviar a todos
+                            # Actualizar estado de balas (el loop periódico enviará el estado)
                             await actualizar_balas()
+                            # Enviar estado inmediatamente para disparos (importante para respuesta rápida)
                             await enviar_estado_a_todos()
                     else:
                         print(f"Disparo recibido de jugador no registrado o ID incorrecto (ID: {player_id_shoot})")
@@ -239,16 +240,14 @@ async def manejar_cliente(websocket: Any):
                     
                     # Verificar si el jugador está registrado
                     if websocket in jugadores and jugadores[websocket]["id"] == player_id:
-                        # Actualizar el estado del jugador
+                        # Actualizar el estado del jugador (sin enviar estado inmediatamente)
+                        # El loop de actualización de balas se encargará de enviar el estado periódicamente
                         estado[player_id] = {"x": x, "y": y}
                         
-                        jugador_info = jugadores[websocket]
-                        print(f"Posición actualizada - Jugador {jugador_info['nombre']} (ID: {player_id}): ({x}, {y})")
-                        
-                        # Actualizar balas antes de enviar estado
-                        await actualizar_balas()
-                        # Enviar el estado completo a todos los clientes
-                        await enviar_estado_a_todos()
+                        # Solo imprimir ocasionalmente para no saturar la consola
+                        # (comentado para reducir overhead)
+                        # jugador_info = jugadores[websocket]
+                        # print(f"Posición actualizada - Jugador {jugador_info['nombre']} (ID: {player_id}): ({x}, {y})")
                     else:
                         print(f"Posición recibida de jugador no registrado o ID incorrecto (ID: {player_id}): ({x}, {y})")
                     
@@ -298,12 +297,15 @@ async def manejar_cliente(websocket: Any):
 async def loop_actualizacion_balas():
     """
     Loop que actualiza las balas periódicamente y envía el estado a todos los clientes.
+    Optimizado para VPN: envía estado a ~30 FPS (cada 33ms) en lugar de 60 FPS.
     """
     while True:
-        await asyncio.sleep(0.016)  # ~60 FPS
-        if balas:  # Solo actualizar si hay balas
+        await asyncio.sleep(0.033)  # ~30 FPS (mejor para VPN con latencia)
+        # Actualizar balas si existen
+        if balas:
             await actualizar_balas()
-            await enviar_estado_a_todos()
+        # Enviar estado periódicamente (incluso si no hay balas, para sincronizar posiciones)
+        await enviar_estado_a_todos()
 
 
 async def main():
