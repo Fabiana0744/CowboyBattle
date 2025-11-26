@@ -195,29 +195,17 @@ async def cliente():
                         
                         # Procesar mensaje de estado del juego
                         elif datos.get("tipo") == "estado":
-                            jugadores_recibidos = datos.get("jugadores", {})
+                            jugadores_recibidos_raw = datos.get("jugadores", {})
                             
-                            # Verificar si el jugador local fue respawneado (posición del servidor diferente)
-                            if player_id is not None and player_id in jugadores_recibidos:
-                                pos_servidor = jugadores_recibidos[player_id]
-                                servidor_x = pos_servidor["x"]
-                                servidor_y = pos_servidor["y"]
-                                
-                                # Calcular distancia entre posición local y del servidor
-                                dist_respawn = math.sqrt((x - servidor_x) ** 2 + (y - servidor_y) ** 2)
-                                
-                                # Si la distancia es grande (probablemente un respawn), sincronizar con el servidor
-                                if dist_respawn > 50:  # Umbral para detectar respawn (ajustable)
-                                    print(f"🔄 Respawn detectado! Sincronizando posición: ({x}, {y}) -> ({servidor_x}, {servidor_y})")
-                                    x = servidor_x
-                                    y = servidor_y
-                                    posicion_anterior = (x, y)
+                            # 👇 Convertimos las llaves a int para que coincidan con player_id
+                            jugadores_recibidos = {int(pid): pos for pid, pos in jugadores_recibidos_raw.items()}
                             
                             # Remover explícitamente el jugador local del estado de otros jugadores
                             estado_jugadores = {}
                             for pid, pos in jugadores_recibidos.items():
                                 # Comparación estricta para asegurar que nunca incluimos al jugador local
-                                if player_id is None or int(pid) != int(player_id):
+                                # pid ya es int, así que la comparación es directa
+                                if player_id is None or pid != player_id:
                                     estado_jugadores[pid] = pos
                             
                             # Actualizar estado de balas
@@ -247,19 +235,18 @@ async def cliente():
                     del estado_jugadores[player_id]
                 
                 # PRIMERO: Dibujar solo los otros jugadores del estado (nunca el jugador local)
+                # Nota: el jugador local ya fue removido de estado_jugadores arriba, así que todos los jugadores aquí son otros
                 for otro_player_id, posicion_otro in estado_jugadores.items():
-                    # Verificación triple: asegurar que nunca dibujamos al jugador local
-                    if player_id is None or int(otro_player_id) != int(player_id):
-                        otro_x = posicion_otro["x"]
-                        otro_y = posicion_otro["y"]
-                        
-                        rectangulo = pygame.Rect(
-                            otro_x - TAMAÑO_CUADRADO // 2,
-                            otro_y - TAMAÑO_CUADRADO // 2,
-                            TAMAÑO_CUADRADO,
-                            TAMAÑO_CUADRADO
-                        )
-                        pygame.draw.rect(pantalla, COLOR_JUGADOR_OTRO, rectangulo)
+                    otro_x = posicion_otro["x"]
+                    otro_y = posicion_otro["y"]
+                    
+                    rectangulo = pygame.Rect(
+                        otro_x - TAMAÑO_CUADRADO // 2,
+                        otro_y - TAMAÑO_CUADRADO // 2,
+                        TAMAÑO_CUADRADO,
+                        TAMAÑO_CUADRADO
+                    )
+                    pygame.draw.rect(pantalla, COLOR_JUGADOR_OTRO, rectangulo)
                 
                 # SEGUNDO: Dibujar el jugador local ÚNICAMENTE con su posición local (una sola vez)
                 # Esto se hace al final para que esté encima si hay algún overlap

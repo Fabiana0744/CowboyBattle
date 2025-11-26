@@ -97,17 +97,9 @@ async def actualizar_balas():
             
             dist = math.hypot(pos["x"] - bx, pos["y"] - by)
             if dist <= RADIO_IMPACTO:
-                print(f"Impacto! Jugador {owner_id} golpea a {pid}")
+                print(f"💥 Impacto! Jugador {owner_id} golpea a {pid}")
                 puntuacion[owner_id] += 1
                 balas_a_eliminar.append(bala_id)
-                
-                # Respawn súper simple del golpeado
-                if pid == 1:
-                    estado[pid]["x"], estado[pid]["y"] = 200, 300
-                elif pid == 2:
-                    estado[pid]["x"], estado[pid]["y"] = 600, 300
-                else:
-                    estado[pid]["x"], estado[pid]["y"] = 400, 300
                 break  # Ya no seguimos revisando esta bala
     
     # Eliminar balas marcadas
