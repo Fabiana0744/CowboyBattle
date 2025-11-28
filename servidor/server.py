@@ -7,6 +7,8 @@ import asyncio
 import json
 import websockets
 import math
+import random
+import string
 from typing import Dict, Any
 from collections import defaultdict
 
@@ -35,11 +37,25 @@ estado_partida = "lobby"
 # Jugadores listos en la sala: player_id -> bool
 jugadores_listos = defaultdict(bool)
 
+# Host de la partida (el jugador que creó la sala)
+host_id = None
+
+# Sistema de salas: código_sala -> {"host_id": int, "jugadores": [websocket, ...]}
+salas: Dict[str, Dict[str, Any]] = {}
+
 # Contador para asignar player_id únicos
 siguiente_player_id = 1
 
 # Contador para asignar IDs únicos a las balas
 siguiente_bala_id = 1
+
+
+def generar_codigo_sala() -> str:
+    """Genera un código único de 6 caracteres para una sala."""
+    while True:
+        codigo = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+        if codigo not in salas:
+            return codigo
 
 
 async def enviar_estado_a_todos():
@@ -139,9 +155,11 @@ async def manejar_cliente(websocket: Any):
     Args:
         websocket: Objeto WebSocket del cliente conectado
     """
-    global siguiente_player_id, siguiente_bala_id, estado, balas, estado_partida
+    global siguiente_player_id, siguiente_bala_id, estado, balas, estado_partida, host_id, salas
     
-    print("Cliente conectado (esperando mensaje 'join')")
+    print("Cliente conectado (esperando mensaje)")
+    
+    codigo_sala_actual = None  # Código de la sala a la que pertenece este cliente
     
     try:
         # Escuchar mensajes del cliente en un loop
@@ -151,8 +169,175 @@ async def manejar_cliente(websocket: Any):
                 datos = json.loads(mensaje)
                 print(f"Mensaje recibido: {datos}")
                 
-                # Procesar mensaje de tipo "join" para registrar al jugador
-                if datos.get("tipo") == "join":
+                # Procesar mensaje de tipo "crear_partida"
+                if datos.get("tipo") == "crear_partida":
+                    nombre = datos.get("nombre", "Jugador")
+                    
+                    # Si ya hay una partida activa, rechazar
+                    if estado_partida == "jugando":
+                        await websocket.send(json.dumps({
+                            "tipo": "error",
+                            "mensaje": "Ya hay una partida en curso"
+                        }))
+                        continue
+                    
+                    # Generar código único para la sala
+                    codigo_sala = generar_codigo_sala()
+                    codigo_sala_actual = codigo_sala
+                    
+                    # Limpiar estado anterior si había una partida
+                    if len(jugadores) == 0:
+                        estado.clear()
+                        balas.clear()
+                        puntuacion.clear()
+                        jugadores_listos.clear()
+                        siguiente_player_id = 1
+                    
+                    # Asignar un player_id único
+                    player_id = siguiente_player_id
+                    siguiente_player_id += 1
+                    
+                    # Este jugador es el host
+                    host_id = player_id
+                    
+                    # Guardar información del jugador
+                    jugadores[websocket] = {
+                        "id": player_id,
+                        "nombre": nombre,
+                        "es_host": True
+                    }
+                    
+                    # Recién entra, aún no está listo
+                    jugadores_listos[player_id] = False
+                    
+                    # Crear la sala
+                    salas[codigo_sala] = {
+                        "host_id": host_id,
+                        "jugadores": [websocket]
+                    }
+                    
+                    print(f"Partida creada - Código: {codigo_sala} por: {nombre} (ID: {player_id}, HOST)")
+                    
+                    # Asignar posición inicial
+                    spawn_x, spawn_y = 200, 300
+                    estado[player_id] = {"x": spawn_x, "y": spawn_y}
+                    
+                    # Enviar respuesta con el player_id asignado, posición inicial y código de sala
+                    mensaje_respuesta = {
+                        "tipo": "asignacion_id",
+                        "player_id": player_id,
+                        "x": spawn_x,
+                        "y": spawn_y,
+                        "es_host": True,
+                        "codigo_sala": codigo_sala
+                    }
+                    await websocket.send(json.dumps(mensaje_respuesta))
+                    
+                    # Enviar estado de la sala a todos
+                    await enviar_evento_a_todos({
+                        "tipo": "estado_sala",
+                        "estado_partida": estado_partida,
+                        "host_id": host_id,
+                        "codigo_sala": codigo_sala,
+                        "jugadores": {
+                            pid: {
+                                "nombre": info["nombre"],
+                                "listo": jugadores_listos[pid],
+                                "es_host": info.get("es_host", False)
+                            }
+                            for _, info in jugadores.items()
+                            for pid in [info["id"]]
+                        }
+                    })
+                    
+                    # Enviar el estado actual a todos los jugadores
+                    await enviar_estado_a_todos()
+                
+                # Procesar mensaje de tipo "unirse_partida"
+                elif datos.get("tipo") == "unirse_partida":
+                    nombre = datos.get("nombre", "Jugador")
+                    codigo_ingresado = datos.get("codigo_sala", "").upper().strip()
+                    
+                    # Validar código
+                    if not codigo_ingresado or codigo_ingresado not in salas:
+                        await websocket.send(json.dumps({
+                            "tipo": "error",
+                            "mensaje": "Código de sala inválido"
+                        }))
+                        continue
+                    
+                    sala = salas[codigo_ingresado]
+                    codigo_sala_actual = codigo_ingresado
+                    
+                    # Si la partida ya está en curso, rechazar
+                    if estado_partida == "jugando":
+                        await websocket.send(json.dumps({
+                            "tipo": "error",
+                            "mensaje": "La partida ya está en curso"
+                        }))
+                        continue
+                    
+                    # Asignar un player_id único
+                    player_id = siguiente_player_id
+                    siguiente_player_id += 1
+                    
+                    # Guardar información del jugador
+                    jugadores[websocket] = {
+                        "id": player_id,
+                        "nombre": nombre,
+                        "es_host": False
+                    }
+                    
+                    # Recién entra, aún no está listo
+                    jugadores_listos[player_id] = False
+                    
+                    # Agregar jugador a la sala
+                    sala["jugadores"].append(websocket)
+                    
+                    print(f"Jugador se unió - Código: {codigo_ingresado}, Nombre: {nombre} (ID: {player_id})")
+                    
+                    # Asignar posición inicial diferente según el número de jugadores
+                    num_jugadores = len(jugadores)
+                    if num_jugadores == 2:
+                        spawn_x, spawn_y = 600, 300
+                    else:
+                        spawn_x, spawn_y = 400, 300
+                    
+                    estado[player_id] = {"x": spawn_x, "y": spawn_y}
+                    
+                    # Enviar respuesta con el player_id asignado y posición inicial
+                    mensaje_respuesta = {
+                        "tipo": "asignacion_id",
+                        "player_id": player_id,
+                        "x": spawn_x,
+                        "y": spawn_y,
+                        "es_host": False,
+                        "codigo_sala": codigo_ingresado
+                    }
+                    await websocket.send(json.dumps(mensaje_respuesta))
+                    
+                    # Enviar estado de la sala a todos
+                    await enviar_evento_a_todos({
+                        "tipo": "estado_sala",
+                        "estado_partida": estado_partida,
+                        "host_id": host_id,
+                        "codigo_sala": codigo_ingresado,
+                        "jugadores": {
+                            pid: {
+                                "nombre": info["nombre"],
+                                "listo": jugadores_listos[pid],
+                                "es_host": info.get("es_host", False)
+                            }
+                            for _, info in jugadores.items()
+                            for pid in [info["id"]]
+                        }
+                    })
+                    
+                    # Enviar el estado actual a todos los jugadores
+                    await enviar_estado_a_todos()
+                
+                # Procesar mensaje de tipo "join" para registrar al jugador (legacy, mantener por compatibilidad)
+                elif datos.get("tipo") == "join":
                     nombre = datos.get("nombre", "Jugador")
                     
                     # Asignar un player_id único
@@ -220,45 +405,74 @@ async def manejar_cliente(websocket: Any):
                         await enviar_evento_a_todos({
                             "tipo": "estado_sala",
                             "estado_partida": estado_partida,
+                            "host_id": host_id,
+                            "codigo_sala": codigo_sala_actual,
                             "jugadores": {
                                 pid: {
                                     "nombre": info["nombre"],
-                                    "listo": jugadores_listos[pid]
+                                    "listo": jugadores_listos[pid],
+                                    "es_host": info.get("es_host", False)
                                 }
                                 for _, info in jugadores.items()
                                 for pid in [info["id"]]
                             }
                         })
+                
+                # Procesar mensaje de "iniciar_partida" (solo el host puede hacerlo)
+                elif datos.get("tipo") == "iniciar_partida":
+                    player_id_iniciar = datos.get("player_id")
+                    
+                    # Verificar que el jugador es el host
+                    if websocket in jugadores and jugadores[websocket]["id"] == player_id_iniciar:
+                        if player_id_iniciar != host_id:
+                            await websocket.send(json.dumps({
+                                "tipo": "error",
+                                "mensaje": "Solo el host puede iniciar la partida"
+                            }))
+                            continue
                         
-                        # Verificar si todos los jugadores conectados están listos para empezar
-                        if estado_partida == "lobby":
-                            # Tomamos todos los IDs actuales
-                            ids_actuales = [info["id"] for info in jugadores.values()]
-                            if ids_actuales and all(jugadores_listos[pid] for pid in ids_actuales) and len(ids_actuales) >= 2:
-                                # Resetear puntuación y posiciones
-                                for pid in ids_actuales:
-                                    puntuacion[pid] = 0
-                                    if pid == 1:
-                                        estado[pid] = {"x": 200, "y": 300}
-                                    elif pid == 2:
-                                        estado[pid] = {"x": 600, "y": 300}
-                                    else:
-                                        estado[pid] = {"x": 400, "y": 300}
-                                
-                                # Limpiar balas
-                                balas.clear()
-                                
-                                # Cambiar estado de partida
-                                estado_partida = "jugando"
-                                
-                                # Avisar a todos que empieza la partida
-                                await enviar_evento_a_todos({
-                                    "tipo": "start_game",
-                                    "estado_partida": estado_partida,
-                                    "puntuacion": dict(puntuacion)
-                                })
-                                # Y mandar un estado inicial
-                                await enviar_estado_a_todos()
+                        if estado_partida != "lobby":
+                            await websocket.send(json.dumps({
+                                "tipo": "error",
+                                "mensaje": "La partida ya está en curso o terminada"
+                            }))
+                            continue
+                        
+                        # Verificar que hay al menos 2 jugadores
+                        ids_actuales = [info["id"] for info in jugadores.values()]
+                        if len(ids_actuales) < 2:
+                            await websocket.send(json.dumps({
+                                "tipo": "error",
+                                "mensaje": "Se necesitan al menos 2 jugadores para iniciar"
+                            }))
+                            continue
+                        
+                        # Resetear puntuación y posiciones
+                        for pid in ids_actuales:
+                            puntuacion[pid] = 0
+                            if pid == ids_actuales[0]:
+                                estado[pid] = {"x": 200, "y": 300}
+                            elif pid == ids_actuales[1]:
+                                estado[pid] = {"x": 600, "y": 300}
+                            else:
+                                estado[pid] = {"x": 400, "y": 300}
+                        
+                        # Limpiar balas
+                        balas.clear()
+                        
+                        # Cambiar estado de partida
+                        estado_partida = "jugando"
+                        
+                        print(f"Partida iniciada por el host (ID: {host_id})")
+                        
+                        # Avisar a todos que empieza la partida
+                        await enviar_evento_a_todos({
+                            "tipo": "start_game",
+                            "estado_partida": estado_partida,
+                            "puntuacion": dict(puntuacion)
+                        })
+                        # Y mandar un estado inicial
+                        await enviar_estado_a_todos()
                 
                 # Procesar mensaje de disparo (solo en estado "jugando")
                 elif datos.get("tipo") == "shoot":
@@ -371,15 +585,56 @@ async def manejar_cliente(websocket: Any):
             player_id = jugador_info["id"]
             print(f"Jugador desconectado: {jugador_info['nombre']} (ID: {player_id})")
             
-            # Remover del diccionario de jugadores
-            del jugadores[websocket]
-            
-            # Remover del estado
-            if player_id in estado:
-                del estado[player_id]
-            
-            # Notificar a los demás jugadores del cambio de estado
-            await enviar_estado_a_todos()
+            # Si el host se desconecta, limpiar la partida
+            if player_id == host_id:
+                print("El host se desconectó, limpiando la partida")
+                # Limpiar la sala
+                if codigo_sala_actual and codigo_sala_actual in salas:
+                    del salas[codigo_sala_actual]
+                host_id = None
+                estado_partida = "lobby"
+                estado.clear()
+                balas.clear()
+                puntuacion.clear()
+                jugadores_listos.clear()
+                jugadores.clear()
+                siguiente_player_id = 1
+            else:
+                # Remover del diccionario de jugadores
+                del jugadores[websocket]
+                
+                # Remover del estado
+                if player_id in estado:
+                    del estado[player_id]
+                
+                # Remover de jugadores listos
+                if player_id in jugadores_listos:
+                    del jugadores_listos[player_id]
+                
+                # Remover de la sala
+                if codigo_sala_actual and codigo_sala_actual in salas:
+                    sala = salas[codigo_sala_actual]
+                    if websocket in sala["jugadores"]:
+                        sala["jugadores"].remove(websocket)
+                
+                # Notificar a los demás jugadores del cambio de estado
+                if jugadores:
+                    await enviar_evento_a_todos({
+                        "tipo": "estado_sala",
+                        "estado_partida": estado_partida,
+                        "host_id": host_id,
+                        "codigo_sala": codigo_sala_actual,
+                        "jugadores": {
+                            pid: {
+                                "nombre": info["nombre"],
+                                "listo": jugadores_listos[pid],
+                                "es_host": info.get("es_host", False)
+                            }
+                            for _, info in jugadores.items()
+                            for pid in [info["id"]]
+                        }
+                    })
+                    await enviar_estado_a_todos()
         else:
             print("Cliente desconectado (no estaba registrado como jugador)")
 

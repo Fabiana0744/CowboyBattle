@@ -175,6 +175,186 @@ def _draw_panel(surface, x, y, w, h, alpha=190):
 
 
 # ------------------------------------------------------------
+# PANTALLA DE MENÚ PRINCIPAL
+# ------------------------------------------------------------
+def draw_menu_principal(
+    pantalla,
+    ancho: int,
+    alto: int,
+    texto_ingresado: str,
+    mensaje_error: str = None
+):
+    """Pantalla inicial: ingresar nombre y elegir crear/unirse a partida."""
+    _draw_background_cowboy(pantalla)
+    
+    # Panel central
+    panel_width = int(ancho * 0.5)
+    panel_height = int(alto * 0.4)
+    panel_x = (ancho - panel_width) // 2
+    panel_y = (alto - panel_height) // 2
+    _draw_panel(pantalla, panel_x, panel_y, panel_width, panel_height, alpha=220)
+    
+    # Título
+    titulo = FONT_TITULO.render("Cowboy Battle", True, (255, 230, 180))
+    pantalla.blit(titulo, (panel_x + (panel_width - titulo.get_width()) // 2, panel_y + 20))
+    
+    # Instrucción para nombre
+    instruccion = FONT_SUBTITULO.render("Ingresa tu nombre:", True, (255, 255, 255))
+    pantalla.blit(instruccion, (panel_x + 30, panel_y + 80))
+    
+    # Campo de texto para nombre
+    campo_nombre_x = panel_x + 30
+    campo_nombre_y = panel_y + 115
+    campo_w = panel_width - 60
+    campo_h = 40
+    pygame.draw.rect(pantalla, (255, 255, 255), (campo_nombre_x, campo_nombre_y, campo_w, campo_h))
+    pygame.draw.rect(pantalla, (255, 255, 0), (campo_nombre_x, campo_nombre_y, campo_w, campo_h), width=3)
+    campo_nombre_rect = pygame.Rect(campo_nombre_x, campo_nombre_y, campo_w, campo_h)
+    
+    # Texto ingresado (nombre)
+    texto_render = FONT_TEXTO.render(texto_ingresado if texto_ingresado else "Escribe tu nombre...", True, (0, 0, 0) if texto_ingresado else (150, 150, 150))
+    pantalla.blit(texto_render, (campo_nombre_x + 10, campo_nombre_y + 8))
+    
+    # Botones
+    boton_y = panel_y + panel_height - 70
+    boton_h = 50
+    boton_w = 180
+    espacio = 30
+    
+    # Botón "Crear Partida"
+    boton_crear_x = panel_x + (panel_width - (boton_w * 2 + espacio)) // 2
+    boton_crear_rect = pygame.Rect(boton_crear_x, boton_y, boton_w, boton_h)
+    color_crear = (0, 150, 0) if texto_ingresado else (100, 100, 100)
+    pygame.draw.rect(pantalla, color_crear, boton_crear_rect, border_radius=5)
+    texto_crear = FONT_SUBTITULO.render("Crear Partida", True, (255, 255, 255))
+    pantalla.blit(texto_crear, (boton_crear_x + (boton_w - texto_crear.get_width()) // 2, boton_y + 12))
+    
+    # Botón "Unirse a Partida"
+    boton_unirse_x = boton_crear_x + boton_w + espacio
+    boton_unirse_rect = pygame.Rect(boton_unirse_x, boton_y, boton_w, boton_h)
+    color_unirse = (0, 100, 200) if texto_ingresado else (100, 100, 100)
+    pygame.draw.rect(pantalla, color_unirse, boton_unirse_rect, border_radius=5)
+    texto_unirse = FONT_SUBTITULO.render("Unirse", True, (255, 255, 255))
+    pantalla.blit(texto_unirse, (boton_unirse_x + (boton_w - texto_unirse.get_width()) // 2, boton_y + 12))
+    
+    # Mensaje de error si hay
+    if mensaje_error:
+        error_texto = FONT_PEQUE.render(mensaje_error, True, (255, 100, 100))
+        pantalla.blit(error_texto, (panel_x + 30, panel_y + panel_height - 30))
+    
+    return boton_crear_rect, boton_unirse_rect, campo_nombre_rect
+
+
+def draw_ingresar_codigo(
+    pantalla,
+    ancho: int,
+    alto: int,
+    nombre_jugador: str,
+    texto_codigo: str,
+    mensaje_error: str = None
+):
+    """Pantalla para ingresar código de sala al unirse."""
+    _draw_background_cowboy(pantalla)
+    
+    # Panel central
+    panel_width = int(ancho * 0.5)
+    panel_height = int(alto * 0.45)
+    panel_x = (ancho - panel_width) // 2
+    panel_y = (alto - panel_height) // 2
+    _draw_panel(pantalla, panel_x, panel_y, panel_width, panel_height, alpha=220)
+    
+    # Título
+    titulo = FONT_TITULO.render("Unirse a Partida", True, (255, 230, 180))
+    pantalla.blit(
+        titulo,
+        (panel_x + (panel_width - titulo.get_width()) // 2, panel_y + 20)
+    )
+    
+    # Mostrar nombre del jugador
+    nombre_texto = FONT_TEXTO.render(f"Jugador: {nombre_jugador}", True, (255, 255, 255))
+    pantalla.blit(nombre_texto, (panel_x + 30, panel_y + 70))
+    
+    # Instrucción para código
+    instruccion = FONT_SUBTITULO.render("Ingresa el código de la sala:", True, (255, 255, 255))
+    pantalla.blit(instruccion, (panel_x + 30, panel_y + 110))
+    
+    # Campo de texto para código
+    campo_codigo_x = panel_x + 30
+    campo_codigo_y = panel_y + 145
+    campo_codigo_w = panel_width - 60
+    campo_codigo_h = 40
+    pygame.draw.rect(
+        pantalla,
+        (255, 255, 255),
+        (campo_codigo_x, campo_codigo_y, campo_codigo_w, campo_codigo_h)
+    )
+    pygame.draw.rect(
+        pantalla,
+        (255, 255, 0),
+        (campo_codigo_x, campo_codigo_y, campo_codigo_w, campo_codigo_h),
+        width=3
+    )
+    campo_codigo_rect = pygame.Rect(
+        campo_codigo_x, campo_codigo_y, campo_codigo_w, campo_codigo_h
+    )
+    
+    # Texto ingresado (código)
+    codigo_render = FONT_TEXTO.render(
+        texto_codigo if texto_codigo else "ABC123",
+        True,
+        (0, 0, 0) if texto_codigo else (150, 150, 150)
+    )
+    pantalla.blit(codigo_render, (campo_codigo_x + 10, campo_codigo_y + 8))
+    
+    # ---------------- Botones dentro del panel ----------------
+    boton_h = 50
+    boton_w = 150
+    espacio = 20
+
+    # Intentar colocar los botones 10px debajo del campo
+    boton_y = campo_codigo_y + campo_codigo_h + 10
+
+    # Si eso los dejaría fuera del panel, los subimos para que quepan
+    limite_inferior_panel = panel_y + panel_height
+    max_boton_y = limite_inferior_panel - boton_h - 20  # margen inferior de 20px
+    boton_y = min(boton_y, max_boton_y)
+
+    # Botón "Cancelar"
+    boton_cancelar_x = panel_x + (panel_width - (boton_w * 2 + espacio)) // 2
+    boton_cancelar_rect = pygame.Rect(boton_cancelar_x, boton_y, boton_w, boton_h)
+    pygame.draw.rect(pantalla, (150, 150, 150), boton_cancelar_rect, border_radius=5)
+    texto_cancelar = FONT_SUBTITULO.render("Cancelar", True, (255, 255, 255))
+    pantalla.blit(
+        texto_cancelar,
+        (boton_cancelar_x + (boton_w - texto_cancelar.get_width()) // 2,
+         boton_y + 12)
+    )
+    
+    # Botón "Unirse"
+    boton_unirse_x = boton_cancelar_x + boton_w + espacio
+    boton_unirse_rect = pygame.Rect(boton_unirse_x, boton_y, boton_w, boton_h)
+    color_unirse = (0, 100, 200) if texto_codigo.strip() else (100, 100, 100)
+    pygame.draw.rect(pantalla, color_unirse, boton_unirse_rect, border_radius=5)
+    texto_unirse = FONT_SUBTITULO.render("Unirse", True, (255, 255, 255))
+    pantalla.blit(
+        texto_unirse,
+        (boton_unirse_x + (boton_w - texto_unirse.get_width()) // 2,
+         boton_y + 12)
+    )
+    
+    # Mensaje de error (si hay), justo debajo de los botones pero aún dentro del panel
+    if mensaje_error:
+        error_texto = FONT_PEQUE.render(mensaje_error, True, (255, 100, 100))
+        error_y = boton_y + boton_h + 10
+        # Que no se salga por abajo del panel
+        if error_y + error_texto.get_height() > limite_inferior_panel - 10:
+            error_y = limite_inferior_panel - 10 - error_texto.get_height()
+        pantalla.blit(error_texto, (panel_x + 30, error_y))
+    
+    return boton_cancelar_rect, boton_unirse_rect, campo_codigo_rect
+
+
+# ------------------------------------------------------------
 # PANTALLA DE LOBBY
 # ------------------------------------------------------------
 def draw_lobby_screen(
@@ -183,7 +363,9 @@ def draw_lobby_screen(
     alto: int,
     player_id: int | None,
     yo_listo: bool,
-    estado_sala: Dict[str, Any]
+    estado_sala: Dict[str, Any],
+    es_host: bool = False,
+    codigo_sala: str | None = None
 ):
     _draw_background_cowboy(pantalla)
 
@@ -197,10 +379,22 @@ def draw_lobby_screen(
     # Título
     titulo = FONT_TITULO.render("Cowboy Battle - Lobby", True, (255, 230, 180))
     pantalla.blit(titulo, (panel_x + 20, panel_y + 15))
+    
+    # Indicador de host (si es host, mostrar junto al título)
+    if es_host:
+        host_texto = FONT_SUBTITULO.render("(HOST)", True, (255, 215, 0))
+        pantalla.blit(host_texto, (panel_x + titulo.get_width() + 30, panel_y + 20))
+    
+    # Mostrar código de sala (debajo del título para evitar superposición)
+    if codigo_sala:
+        codigo_texto = FONT_SUBTITULO.render(f"Código de sala: {codigo_sala}", True, (255, 255, 0))
+        pantalla.blit(codigo_texto, (panel_x + 20, panel_y + 60))
+        instruccion_codigo = FONT_PEQUE.render("Comparte este código con otros jugadores", True, (200, 200, 200))
+        pantalla.blit(instruccion_codigo, (panel_x + 20, panel_y + 85))
 
     # Estado de jugadores
     jugadores = estado_sala.get("jugadores", {})
-    y_text = panel_y + 70
+    y_text = panel_y + 120  # Más abajo para dejar espacio al código
 
     if not jugadores:
         texto = FONT_TEXTO.render("Esperando jugadores que se conecten...", True, (255, 255, 255))
@@ -229,19 +423,23 @@ def draw_lobby_screen(
             )
             pantalla.blit(texto_jugador, (panel_x + 40, y_text))
             y_text += 28
-
+    
     # Instrucciones
-    y_text = panel_y + panel_height - 90
-    instr1 = FONT_TEXTO.render("Pulsa L para cambiar tu estado de listo.", True, (255, 255, 255))
-    instr2 = FONT_TEXTO.render("El juego inicia cuando todos estén listos.", True, (255, 255, 255))
-    pantalla.blit(instr1, (panel_x + 20, y_text))
-    pantalla.blit(instr2, (panel_x + 20, y_text + 28))
+    y_text = panel_y + panel_height - 120
+    if es_host:
+        instr1 = FONT_TEXTO.render("Presiona ESPACIO para iniciar la partida", True, (255, 255, 0))
+        pantalla.blit(instr1, (panel_x + 20, y_text))
+        y_text += 30
+    else:
+        instr1 = FONT_TEXTO.render("Esperando a que el host inicie la partida...", True, (255, 255, 255))
+        pantalla.blit(instr1, (panel_x + 20, y_text))
+        y_text += 30
 
     # Indicador de si tú estás listo
     estado_txt = "LISTO" if yo_listo else "No listo"
     color_estado = (0, 255, 120) if yo_listo else (255, 120, 120)
-    texto_estado = FONT_SUBTITULO.render(f"Tu estado: {estado_txt}", True, color_estado)
-    pantalla.blit(texto_estado, (panel_x + panel_width - 280, panel_y + 20))
+    texto_estado = FONT_TEXTO.render(f"Tu estado: {estado_txt}", True, color_estado)
+    pantalla.blit(texto_estado, (panel_x + 20, y_text))
 
 
 # ------------------------------------------------------------
@@ -257,7 +455,8 @@ def draw_game_screen(
     y_local: float,
     estado_balas: Dict[str, Dict[str, float]],
     puntuacion: Dict[int, int],
-    jugadores_danados: Dict[int, float] = None
+    jugadores_danados: Dict[int, float] = None,
+    nombres_jugadores: Dict[int, str] = None
 ):
     _draw_background_cowboy(pantalla)
 
@@ -273,6 +472,8 @@ def draw_game_screen(
     dano_img = _load_jugador_dano_image()
     if jugadores_danados is None:
         jugadores_danados = {}
+    if nombres_jugadores is None:
+        nombres_jugadores = {}
     
     # Jugadores remotos
     for pid, pos in estado_jugadores.items():
@@ -299,8 +500,8 @@ def draw_game_screen(
             rect.center = (jx, jy)
             pygame.draw.rect(pantalla, COLOR_JUGADOR_OTRO, rect, border_radius=5)
 
-        # Label encima
-        nick = f"P{pid}"
+        # Label encima - usar nombre si está disponible, sino "P{pid}"
+        nick = nombres_jugadores.get(pid, f"P{pid}")
         label = FONT_PEQUE.render(nick, True, (255, 255, 255))
         pantalla.blit(label, (jx - label.get_width() // 2, jy - TAMAÑO_CUADRADO // 2 - 18))
 
@@ -334,12 +535,15 @@ def draw_game_screen(
                                     y_local_int - TAMAÑO_CUADRADO // 2 - 18))
 
     # Marcador
-    _draw_scoreboard(pantalla, ancho, puntuacion, player_id)
+    _draw_scoreboard(pantalla, ancho, puntuacion, player_id, nombres_jugadores)
 
 
-def _draw_scoreboard(pantalla, ancho: int, puntuacion: Dict[int, int], player_id: int | None):
+def _draw_scoreboard(pantalla, ancho: int, puntuacion: Dict[int, int], player_id: int | None, nombres_jugadores: Dict[int, str] = None):
     if not puntuacion:
         return
+    
+    if nombres_jugadores is None:
+        nombres_jugadores = {}
 
     panel_width = 240
     panel_height = 20 + 28 * (len(puntuacion) + 1)
@@ -355,7 +559,8 @@ def _draw_scoreboard(pantalla, ancho: int, puntuacion: Dict[int, int], player_id
     for pid, score in sorted(puntuacion.items(), key=lambda kv: kv[1], reverse=True):
         es_local = (player_id is not None and pid == player_id)
         color = (0, 255, 140) if es_local else (255, 255, 255)
-        texto = FONT_TEXTO.render(f"P{pid}: {score}", True, color)
+        nombre = nombres_jugadores.get(pid, f"P{pid}")
+        texto = FONT_TEXTO.render(f"{nombre}: {score}", True, color)
         pantalla.blit(texto, (panel_x + 15, y))
         y += 25
 
@@ -368,9 +573,13 @@ def draw_game_over_screen(
     ancho: int,
     alto: int,
     ganador_id: int | None,
-    puntuacion: Dict[int, int]
+    puntuacion: Dict[int, int],
+    nombres_jugadores: Dict[int, str] = None
 ):
     _draw_background_cowboy(pantalla)
+    
+    if nombres_jugadores is None:
+        nombres_jugadores = {}
 
     panel_width = int(ancho * 0.6)
     panel_height = int(alto * 0.5)
@@ -384,8 +593,9 @@ def draw_game_over_screen(
 
     # Ganador
     if ganador_id is not None:
+        nombre_ganador = nombres_jugadores.get(ganador_id, f"P{ganador_id}")
         texto_ganador = FONT_SUBTITULO.render(
-            f"Ganador: P{ganador_id}",
+            f"Ganador: {nombre_ganador}",
             True,
             (0, 255, 140)
         )
@@ -408,7 +618,8 @@ def draw_game_over_screen(
     y += 35
 
     for pid, score in sorted(puntuacion.items(), key=lambda kv: kv[1], reverse=True):
-        linea = FONT_TEXTO.render(f"P{pid}: {score}", True, (255, 255, 255))
+        nombre = nombres_jugadores.get(pid, f"P{pid}")
+        linea = FONT_TEXTO.render(f"{nombre}: {score}", True, (255, 255, 255))
         pantalla.blit(linea, (panel_x + 40, y))
         y += 26
 
