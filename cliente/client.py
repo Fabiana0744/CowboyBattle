@@ -320,6 +320,7 @@ async def cliente():
 
             # Solo permitir movimiento si estamos en juego
             if en_juego and not game_over:
+                # DIRECCIÓN según teclas
                 if teclas[pygame.K_w] or teclas[pygame.K_UP]:
                     movimiento_y = -VELOCIDAD_MOVIMIENTO
                     ultima_direccion_movimiento = "up"
@@ -333,13 +334,34 @@ async def cliente():
                     movimiento_x = VELOCIDAD_MOVIMIENTO
                     ultima_direccion_movimiento = "right"
 
-                # Actualizar posición
-                x += movimiento_x
-                y += movimiento_y
+                # Rects de obstáculos (barriles)
+                obstaculos_rects = theme.get_obstaculos_rects()
 
-                # Mantener el jugador dentro de los límites de la ventana
-                x = max(theme.TAMAÑO_CUADRADO // 2, min(ANCHO_VENTANA - theme.TAMAÑO_CUADRADO // 2, x))
-                y = max(theme.TAMAÑO_CUADRADO // 2, min(ALTO_VENTANA - theme.TAMAÑO_CUADRADO // 2, y))
+                # --- Movimiento en X con colisión ---
+                if movimiento_x != 0:
+                    nuevo_x = x + movimiento_x
+                    # Limites de ventana
+                    nuevo_x = max(theme.TAMAÑO_CUADRADO // 2,
+                                  min(ANCHO_VENTANA - theme.TAMAÑO_CUADRADO // 2, nuevo_x))
+
+                    rect_jugador = pygame.Rect(0, 0, theme.TAMAÑO_CUADRADO, theme.TAMAÑO_CUADRADO)
+                    rect_jugador.center = (nuevo_x, y)
+
+                    # Solo aplicamos el movimiento si NO chocamos con un obstáculo
+                    if not any(rect_jugador.colliderect(o) for o in obstaculos_rects):
+                        x = nuevo_x
+
+                # --- Movimiento en Y con colisión ---
+                if movimiento_y != 0:
+                    nuevo_y = y + movimiento_y
+                    nuevo_y = max(theme.TAMAÑO_CUADRADO // 2,
+                                  min(ALTO_VENTANA - theme.TAMAÑO_CUADRADO // 2, nuevo_y))
+
+                    rect_jugador = pygame.Rect(0, 0, theme.TAMAÑO_CUADRADO, theme.TAMAÑO_CUADRADO)
+                    rect_jugador.center = (x, nuevo_y)
+
+                    if not any(rect_jugador.colliderect(o) for o in obstaculos_rects):
+                        y = nuevo_y
 
             # ------------------------------
             # Enviar disparo

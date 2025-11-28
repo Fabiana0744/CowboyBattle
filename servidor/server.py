@@ -28,6 +28,24 @@ balas: Dict[int, Dict[str, Any]] = {}
 # Radio de impacto para detectar colisiones bala-jugador
 RADIO_IMPACTO = 25  # "hitbox" de impacto
 
+# Tamaño del barril (debe coincidir con el cliente)
+BARRIL_ANCHO = 55
+BARRIL_ALTO = 85
+
+# Tamaño del cactus (debe coincidir con el cliente)
+CACTUS_ANCHO = 50
+CACTUS_ALTO = 80
+
+# Lista de obstáculos fijos del mapa (debe coincidir con el cliente)
+OBSTACULOS = [
+    {"tipo": "barril_marron", "x": 400, "y": 300},
+    {"tipo": "barril_naranja", "x": 260, "y": 210},
+    {"tipo": "barril_marron", "x": 540, "y": 210},
+    {"tipo": "cactus", "x": 150, "y": 150},
+    {"tipo": "cactus", "x": 650, "y": 450},
+    {"tipo": "cactus", "x": 400, "y": 100},
+]
+
 # Puntuación: player_id -> cantidad de impactos a otros jugadores
 puntuacion = defaultdict(int)
 
@@ -120,7 +138,42 @@ async def actualizar_balas():
             balas_a_eliminar.append(bala_id)
             continue
         
-        # 2) Revisar impacto contra todos los jugadores
+        # 2) Revisar colisión con obstáculos (barriles y cactus)
+        for obs in OBSTACULOS:
+            obs_x = obs["x"]
+            obs_y = obs["y"]
+            tipo_obs = obs["tipo"]
+            
+            # Determinar tamaño según el tipo de obstáculo
+            if tipo_obs == "cactus":
+                obs_ancho = CACTUS_ANCHO
+                obs_alto = CACTUS_ALTO
+                nombre_obs = "cactus"
+            else:
+                # Es un barril
+                obs_ancho = BARRIL_ANCHO
+                obs_alto = BARRIL_ALTO
+                nombre_obs = "barril"
+            
+            # Crear rectángulo del obstáculo (centrado en obs_x, obs_y)
+            obs_rect_left = obs_x - obs_ancho // 2
+            obs_rect_top = obs_y - obs_alto // 2
+            obs_rect_right = obs_x + obs_ancho // 2
+            obs_rect_bottom = obs_y + obs_alto // 2
+            
+            # Verificar si la bala está dentro del rectángulo del obstáculo
+            if (obs_rect_left <= bx <= obs_rect_right and 
+                obs_rect_top <= by <= obs_rect_bottom):
+                # La bala chocó con un obstáculo, eliminarla
+                print(f"💥 Bala {bala_id} chocó con {nombre_obs} en ({obs_x}, {obs_y})")
+                balas_a_eliminar.append(bala_id)
+                break  # Ya no seguimos revisando esta bala
+        
+        # Si la bala ya fue marcada para eliminar (por chocar con obstáculo), continuar
+        if bala_id in balas_a_eliminar:
+            continue
+        
+        # 3) Revisar impacto contra todos los jugadores
         for pid, pos in estado.items():
             if pid == owner_id:
                 continue  # No se auto-pega
