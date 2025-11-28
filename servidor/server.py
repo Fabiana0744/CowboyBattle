@@ -9,6 +9,7 @@ import websockets
 import math
 import random
 import string
+import time
 from typing import Dict, Any
 from collections import defaultdict
 
@@ -35,6 +36,9 @@ BARRIL_ALTO = 85
 # Tamaño del cactus (debe coincidir con el cliente)
 CACTUS_ANCHO = 50
 CACTUS_ALTO = 80
+
+# Tamaño del jugador (para colisiones)
+TAMAÑO_JUGADOR = 60
 
 # Lista de obstáculos fijos del mapa (debe coincidir con el cliente)
 OBSTACULOS = [
@@ -67,6 +71,22 @@ siguiente_player_id = 1
 # Contador para asignar IDs únicos a las balas
 siguiente_bala_id = 1
 
+# Sistema de estrellas (power-ups)
+# Estado de la estrella: None si no hay estrella, o {"x": x, "y": y, "tiempo_creacion": tiempo}
+estrella_actual: Dict[str, Any] | None = None
+
+# Tamaño de la estrella (debe coincidir con el cliente)
+ESTRELLA_TAMAÑO = 40
+
+# Tiempo entre apariciones de estrellas (en segundos)
+TIEMPO_ENTRE_ESTRELLAS = 10.0  # 10 segundos
+
+# Duración de la invencibilidad (en segundos)
+DURACION_INVENCIBILIDAD = 5.0  # 5 segundos
+
+# Jugadores invencibles: player_id -> tiempo_fin_invencibilidad
+jugadores_invencibles: Dict[int, float] = {}
+
 
 def generar_codigo_sala() -> str:
     """Genera un código único de 6 caracteres para una sala."""
@@ -76,10 +96,58 @@ def generar_codigo_sala() -> str:
             return codigo
 
 
+def colisiona_con_obstaculo(x: float, y: float, radio: float) -> bool:
+    """Verifica si una posición colisiona con algún obstáculo."""
+    for obs in OBSTACULOS:
+        obs_x = obs["x"]
+        obs_y = obs["y"]
+        tipo_obs = obs["tipo"]
+        
+        if tipo_obs == "cactus":
+            obs_ancho = CACTUS_ANCHO
+            obs_alto = CACTUS_ALTO
+        else:
+            obs_ancho = BARRIL_ANCHO
+            obs_alto = BARRIL_ALTO
+        
+        # Verificar colisión rectangular
+        obs_left = obs_x - obs_ancho // 2 - radio
+        obs_right = obs_x + obs_ancho // 2 + radio
+        obs_top = obs_y - obs_alto // 2 - radio
+        obs_bottom = obs_y + obs_alto // 2 + radio
+        
+        if obs_left <= x <= obs_right and obs_top <= y <= obs_bottom:
+            return True
+    
+    return False
+
+
+def generar_posicion_estrella() -> tuple[float, float] | None:
+    """Genera una posición aleatoria para la estrella que no colisione con obstáculos."""
+    ANCHO_PANTALLA = 800
+    ALTO_PANTALLA = 600
+    MARGEN = 50  # Margen desde los bordes
+    
+    intentos = 0
+    max_intentos = 50
+    
+    while intentos < max_intentos:
+        x = random.uniform(MARGEN, ANCHO_PANTALLA - MARGEN)
+        y = random.uniform(MARGEN, ALTO_PANTALLA - MARGEN)
+        
+        # Verificar que no colisione con obstáculos
+        if not colisiona_con_obstaculo(x, y, ESTRELLA_TAMAÑO // 2):
+            return (x, y)
+        
+        intentos += 1
+    
+    return None  # No se pudo encontrar una posición válida
+
+
 async def enviar_estado_a_todos():
     """
     Envía el estado completo del juego a todos los jugadores conectados.
-    """
+"""
     if jugadores:
         # Preparar estado de balas simplificado (posición y player_id para verificar disparos)
         balas_estado = {}
@@ -90,11 +158,31 @@ async def enviar_estado_a_todos():
                 "player_id": bala_info["player_id"]  # Incluir player_id para verificar en cliente
             }
         
+        # Preparar estado de la estrella
+        estrella_estado = None
+        if estrella_actual is not None:
+            estrella_estado = {
+                "x": estrella_actual["x"],
+                "y": estrella_actual["y"]
+            }
+        
+        # Preparar estado de invencibilidad
+        invencibles_estado = {}
+        tiempo_actual = time.time()
+        for pid, tiempo_fin in list(jugadores_invencibles.items()):
+            if tiempo_actual < tiempo_fin:
+                invencibles_estado[pid] = tiempo_fin - tiempo_actual  # Tiempo restante
+            else:
+                # La invencibilidad expiró, remover
+                del jugadores_invencibles[pid]
+        
         mensaje_estado = {
             "tipo": "estado",
             "jugadores": estado,
             "balas": balas_estado,
-            "puntuacion": dict(puntuacion)  # convertir defaultdict a dict normal
+            "puntuacion": dict(puntuacion),  # convertir defaultdict a dict normal
+            "estrella": estrella_estado,
+            "jugadores_invencibles": invencibles_estado
         }
         mensaje_json = json.dumps(mensaje_estado)
         tareas = [
@@ -178,6 +266,11 @@ async def actualizar_balas():
             if pid == owner_id:
                 continue  # No se auto-pega
             
+            # Verificar si el jugador objetivo es invencible
+            tiempo_actual = time.time()
+            if pid in jugadores_invencibles and tiempo_actual < jugadores_invencibles[pid]:
+                continue  # El jugador es invencible, no puede ser golpeado
+            
             dist = math.hypot(pos["x"] - bx, pos["y"] - by)
             if dist <= RADIO_IMPACTO:
                 print(f"💥 Impacto! Jugador {owner_id} golpea a {pid}")
@@ -199,6 +292,31 @@ async def actualizar_balas():
     # Eliminar balas marcadas
     for bala_id in balas_a_eliminar:
         balas.pop(bala_id, None)
+
+
+async def actualizar_estrellas():
+    """Actualiza el sistema de estrellas: genera nuevas y detecta recogida."""
+    global estrella_actual, jugadores_invencibles
+    
+    tiempo_actual = time.time()
+    
+    # Si no hay estrella y ha pasado suficiente tiempo, generar una nueva
+    if estrella_actual is None and estado_partida == "jugando":
+        # Verificar si es momento de generar una nueva estrella
+        # (esto se manejará en el loop principal con un timer)
+        pass
+    elif estrella_actual is not None:
+        # Verificar si algún jugador recogió la estrella
+        for pid, pos in estado.items():
+            dist = math.hypot(pos["x"] - estrella_actual["x"], pos["y"] - estrella_actual["y"])
+            radio_recogida = (TAMAÑO_JUGADOR + ESTRELLA_TAMAÑO) // 2
+            
+            if dist <= radio_recogida:
+                # El jugador recogió la estrella
+                print(f"⭐ Jugador {pid} recogió la estrella! Invencible por {DURACION_INVENCIBILIDAD}s")
+                jugadores_invencibles[pid] = tiempo_actual + DURACION_INVENCIBILIDAD
+                estrella_actual = None  # La estrella desaparece
+                break
 
 
 async def manejar_cliente(websocket: Any):
@@ -510,8 +628,10 @@ async def manejar_cliente(websocket: Any):
                             else:
                                 estado[pid] = {"x": 400, "y": 300}
                         
-                        # Limpiar balas
+                        # Limpiar balas y estrellas
                         balas.clear()
+                        estrella_actual = None
+                        jugadores_invencibles.clear()
                         
                         # Cambiar estado de partida
                         estado_partida = "jugando"
@@ -692,6 +812,34 @@ async def manejar_cliente(websocket: Any):
             print("Cliente desconectado (no estaba registrado como jugador)")
 
 
+async def loop_generar_estrellas():
+    """Loop que genera estrellas periódicamente."""
+    global estrella_actual
+    
+    ultima_estrella_tiempo = 0.0
+    
+    while True:
+        if estado_partida == "jugando":
+            tiempo_actual = time.time()
+            
+            # Si no hay estrella y ha pasado suficiente tiempo desde la última
+            if estrella_actual is None and (tiempo_actual - ultima_estrella_tiempo) >= TIEMPO_ENTRE_ESTRELLAS:
+                pos = generar_posicion_estrella()
+                if pos is not None:
+                    estrella_actual = {
+                        "x": pos[0],
+                        "y": pos[1],
+                        "tiempo_creacion": tiempo_actual
+                    }
+                    ultima_estrella_tiempo = tiempo_actual
+                    print(f"⭐ Nueva estrella generada en ({pos[0]:.1f}, {pos[1]:.1f})")
+            elif estrella_actual is not None:
+                # Actualizar detección de recogida
+                await actualizar_estrellas()
+        
+        await asyncio.sleep(0.1)  # Revisar cada 100ms
+
+
 async def loop_actualizacion_balas():
     """
     Loop que actualiza las balas periódicamente y envía el estado a todos los clientes.
@@ -705,11 +853,16 @@ async def loop_actualizacion_balas():
             # Actualizar balas si existen
             if balas:
                 await actualizar_balas()
+            # Actualizar estrellas
+            await actualizar_estrellas()
             # Enviar estado frecuentemente durante partida
             await enviar_estado_a_todos()
         else:
             # En lobby/game_over, actualizar menos frecuentemente
             await asyncio.sleep(0.033)  # ~30 FPS en otros estados
+            # Limpiar estrella si estamos fuera del juego
+            if estado_partida != "jugando":
+                estrella_actual = None
             # Enviar estado periódicamente (para sincronizar estado del juego)
             await enviar_estado_a_todos()
 
@@ -726,6 +879,8 @@ async def main():
     async with websockets.serve(manejar_cliente, "0.0.0.0", 9000):
         # Iniciar el loop de actualización de balas en segundo plano
         asyncio.create_task(loop_actualizacion_balas())
+        # Iniciar el loop de generación de estrellas
+        asyncio.create_task(loop_generar_estrellas())
         
         # Mantener el servidor corriendo indefinidamente
         await asyncio.Future()  # Ejecutar para siempre

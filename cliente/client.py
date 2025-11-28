@@ -67,6 +67,12 @@ async def cliente():
     jugadores_danados: Dict[int, float] = {}
     DURACION_DANO = 0.3  # Duración del efecto de daño en segundos
 
+    # Estado de la estrella (power-up)
+    estrella_pos: Dict[str, float] | None = None
+
+    # Jugadores invencibles: player_id -> tiempo_restante
+    jugadores_invencibles: Dict[int, float] = {}
+
     # Control de disparo: solo permitir un disparo a la vez
     puede_disparar = True
     ultima_direccion_movimiento = "up"
@@ -496,6 +502,16 @@ async def cliente():
 
                             estado_balas = balas_recibidas
 
+                            # Estrella (power-up)
+                            estrella_pos = datos.get("estrella")
+
+                            # Jugadores invencibles
+                            invencibles_recibidos = datos.get("jugadores_invencibles", {})
+                            jugadores_invencibles = {
+                                int(pid): tiempo_restante 
+                                for pid, tiempo_restante in invencibles_recibidos.items()
+                            }
+
                             # Puntuación
                             puntuacion_recibida = datos.get("puntuacion", {})
                             puntuacion_nueva = {
@@ -670,7 +686,7 @@ async def cliente():
                         nombre = info.get("nombre", f"P{pid}")
                         nombres_jugadores[pid] = nombre
 
-                # Aquí asumo que theme.draw_game_screen acepta jugadores_danados
+                # Dibujar pantalla de juego con todos los estados
                 theme.draw_game_screen(
                     pantalla,
                     ANCHO_VENTANA,
@@ -683,6 +699,8 @@ async def cliente():
                     puntuacion,
                     jugadores_danados,
                     nombres_jugadores,
+                    estrella_pos,
+                    jugadores_invencibles,
                 )
 
             pygame.display.flip()

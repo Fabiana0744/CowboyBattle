@@ -1,6 +1,7 @@
 import pygame
 import os
 import math
+import time
 from typing import Dict, Any, List
 
 # Tamaños compartidos con el cliente
@@ -15,6 +16,9 @@ BARRIL_ALTO = 85
 CACTUS_ANCHO = 50
 CACTUS_ALTO = 80
 
+# Tamaño de la estrella (power-up)
+ESTRELLA_TAMAÑO = 40
+
 # Colores base
 COLOR_JUGADOR_LOCAL = (0, 140, 255)   # Azul intenso
 COLOR_JUGADOR_OTRO = (255, 140, 0)    # Naranja
@@ -26,6 +30,7 @@ _JUGADOR_IMAGES: Dict[tuple, pygame.Surface] = {}
 _JUGADOR_DANO_IMAGE: pygame.Surface | None = None
 _BARRIL_IMAGES: Dict[tuple, pygame.Surface] = {}
 _CACTUS_IMAGE: pygame.Surface | None = None
+_ESTRELLA_IMAGE: pygame.Surface | None = None
 
 # Mapeo tipo -> archivo de sprite del barril
 # Asegúrate de tener estos archivos en: proyecto/assets/barril1.png, barril2.png
@@ -181,6 +186,30 @@ def _load_cactus_image() -> pygame.Surface | None:
             _CACTUS_IMAGE = None
 
     return _CACTUS_IMAGE
+
+
+def _load_estrella_image() -> pygame.Surface | None:
+    """Carga la imagen de la estrella y la escala al tamaño ESTRELLA_TAMAÑO."""
+    global _ESTRELLA_IMAGE
+
+    if _ESTRELLA_IMAGE is None:
+        ruta_estrella = os.path.join(
+            os.path.dirname(__file__),
+            "..",
+            "assets",
+            "estrella.png"
+        )
+        try:
+            imagen = pygame.image.load(ruta_estrella).convert_alpha()
+            _ESTRELLA_IMAGE = pygame.transform.scale(
+                imagen,
+                (ESTRELLA_TAMAÑO, ESTRELLA_TAMAÑO)
+            )
+        except Exception as e:
+            print(f"Error al cargar estrella: {e}")
+            _ESTRELLA_IMAGE = None
+
+    return _ESTRELLA_IMAGE
 
 # ------------------------------------------------------------
 # Fondo
@@ -605,12 +634,28 @@ def draw_game_screen(
     estado_balas: Dict[str, Dict[str, float]],
     puntuacion: Dict[int, int],
     jugadores_danados: Dict[int, float] = None,
-    nombres_jugadores: Dict[int, str] = None
+    nombres_jugadores: Dict[int, str] = None,
+    estrella_pos: Dict[str, float] | None = None,
+    jugadores_invencibles: Dict[int, float] = None
 ):
     _draw_arena_background(pantalla)
 
     # DIBUJAR OBSTÁCULOS (barriles rectangulares)
     _draw_obstaculos(pantalla)
+
+    # Dibujar estrella (power-up) si existe
+    if estrella_pos is not None:
+        estrella_img = _load_estrella_image()
+        sx = int(estrella_pos.get("x", 0))
+        sy = int(estrella_pos.get("y", 0))
+        if estrella_img:
+            rect_estrella = estrella_img.get_rect()
+            rect_estrella.center = (sx, sy)
+            pantalla.blit(estrella_img, rect_estrella)
+        else:
+            # Fallback: dibujar estrella simple
+            pygame.draw.circle(pantalla, (255, 255, 0), (sx, sy), ESTRELLA_TAMAÑO // 2)
+            pygame.draw.circle(pantalla, (255, 215, 0), (sx, sy), ESTRELLA_TAMAÑO // 2 - 3)
 
     # Balas
     for bala_id, info in estado_balas.items():
@@ -623,6 +668,8 @@ def draw_game_screen(
         jugadores_danados = {}
     if nombres_jugadores is None:
         nombres_jugadores = {}
+    if jugadores_invencibles is None:
+        jugadores_invencibles = {}
 
     # Jugadores remotos
     for pid, pos in estado_jugadores.items():
@@ -630,8 +677,13 @@ def draw_game_screen(
         jy = int(pos.get("y", 0))
 
         esta_danado = pid in jugadores_danados
+        es_invencible = pid in jugadores_invencibles
 
-        if esta_danado and dano_img:
+        # Si es invencible, hacer efecto de parpadeo (brillo)
+        tiempo_actual = time.time()
+        mostrar_brillo = es_invencible and (int(tiempo_actual * 5) % 2 == 0)  # Parpadea 5 veces por segundo
+
+        if esta_danado and dano_img and not es_invencible:
             imagen_a_dibujar = dano_img
         else:
             imagen_a_dibujar = _load_jugador_image(pid)
@@ -639,14 +691,25 @@ def draw_game_screen(
         if imagen_a_dibujar:
             rect_jugador = imagen_a_dibujar.get_rect()
             rect_jugador.center = (jx, jy)
+            
+            # Si es invencible, dibujar con brillo/aura
+            if mostrar_brillo:
+                # Dibujar aura dorada alrededor
+                aura_rect = rect_jugador.inflate(10, 10)
+                superficie_aura = pygame.Surface(aura_rect.size, pygame.SRCALPHA)
+                pygame.draw.ellipse(superficie_aura, (255, 215, 0, 100), superficie_aura.get_rect())
+                pantalla.blit(superficie_aura, aura_rect)
+            
             pantalla.blit(imagen_a_dibujar, rect_jugador)
         else:
             rect = pygame.Rect(0, 0, TAMAÑO_CUADRADO, TAMAÑO_CUADRADO)
             rect.center = (jx, jy)
-            pygame.draw.rect(pantalla, COLOR_JUGADOR_OTRO, rect, border_radius=5)
+            color = (255, 215, 0) if es_invencible and mostrar_brillo else COLOR_JUGADOR_OTRO
+            pygame.draw.rect(pantalla, color, rect, border_radius=5)
 
         nick = nombres_jugadores.get(pid, f"P{pid}")
-        label = FONT_PEQUE.render(nick, True, (255, 255, 255))
+        color_label = (255, 215, 0) if es_invencible else (255, 255, 255)
+        label = FONT_PEQUE.render(nick, True, color_label)
         pantalla.blit(label, (jx - label.get_width() // 2, jy - TAMAÑO_CUADRADO // 2 - 18))
 
     # Jugador local
@@ -655,8 +718,13 @@ def draw_game_screen(
         y_local_int = int(y_local)
 
         esta_danado_local = player_id in jugadores_danados
+        es_invencible_local = player_id in jugadores_invencibles
 
-        if esta_danado_local and dano_img:
+        # Efecto de parpadeo para invencibilidad
+        tiempo_actual = time.time()
+        mostrar_brillo_local = es_invencible_local and (int(tiempo_actual * 5) % 2 == 0)
+
+        if esta_danado_local and dano_img and not es_invencible_local:
             imagen_a_dibujar_local = dano_img
         else:
             imagen_a_dibujar_local = _load_jugador_image(player_id)
@@ -664,13 +732,25 @@ def draw_game_screen(
         if imagen_a_dibujar_local:
             rect_jugador_local = imagen_a_dibujar_local.get_rect()
             rect_jugador_local.center = (x_local_int, y_local_int)
+            
+            # Si es invencible, dibujar con brillo/aura
+            if mostrar_brillo_local:
+                # Dibujar aura dorada alrededor
+                aura_rect = rect_jugador_local.inflate(10, 10)
+                superficie_aura = pygame.Surface(aura_rect.size, pygame.SRCALPHA)
+                pygame.draw.ellipse(superficie_aura, (255, 215, 0, 100), superficie_aura.get_rect())
+                pantalla.blit(superficie_aura, aura_rect)
+            
             pantalla.blit(imagen_a_dibujar_local, rect_jugador_local)
         else:
             rect_local = pygame.Rect(0, 0, TAMAÑO_CUADRADO, TAMAÑO_CUADRADO)
             rect_local.center = (x_local_int, y_local_int)
-            pygame.draw.rect(pantalla, COLOR_JUGADOR_LOCAL, rect_local, border_radius=8)
+            color_local = (255, 215, 0) if es_invencible_local and mostrar_brillo_local else COLOR_JUGADOR_LOCAL
+            pygame.draw.rect(pantalla, color_local, rect_local, border_radius=8)
 
-        label_local = FONT_PEQUE.render("Tú", True, (255, 255, 255))
+        label_local_texto = "Tú ⭐" if es_invencible_local else "Tú"
+        color_label_local = (255, 215, 0) if es_invencible_local else (255, 255, 255)
+        label_local = FONT_PEQUE.render(label_local_texto, True, color_label_local)
         pantalla.blit(label_local, (x_local_int - label_local.get_width() // 2,
                                     y_local_int - TAMAÑO_CUADRADO // 2 - 18))
 
