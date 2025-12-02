@@ -76,15 +76,21 @@ FONT_PEQUE = pygame.font.SysFont("bahnschrift", 18)
 # Carga de sprites
 # ------------------------------------------------------------
 
-def _load_jugador_image(player_id: int):
+def _load_jugador_image(player_id: int, sprite_index: int | None = None):
     """
-    Carga la imagen del jugador según su ID.
-    Jugador 1 -> jugador1.png, Jugador 2 -> jugador2.png, Jugador 3 -> jugador3.png
+    Carga la imagen del jugador según su sprite_index o player_id.
+    Si se proporciona sprite_index, lo usa directamente (1, 2 o 3).
+    Si no, calcula del player_id: Jugador 1 -> jugador1.png, Jugador 2 -> jugador2.png, Jugador 3 -> jugador3.png
     Si hay más de 3 jugadores, rota entre las 3 imágenes.
     """
     global _JUGADOR_IMAGES
 
-    imagen_num = ((player_id - 1) % 3) + 1
+    # Usar sprite_index si se proporciona, sino calcular del player_id
+    if sprite_index is not None:
+        imagen_num = sprite_index
+    else:
+        imagen_num = ((player_id - 1) % 3) + 1
+    
     clave = (imagen_num, TAMAÑO_CUADRADO)
 
     if clave in _JUGADOR_IMAGES:
@@ -636,7 +642,8 @@ def draw_game_screen(
     jugadores_danados: Dict[int, float] = None,
     nombres_jugadores: Dict[int, str] = None,
     estrella_pos: Dict[str, float] | None = None,
-    jugadores_invencibles: Dict[int, float] = None
+    jugadores_invencibles: Dict[int, float] = None,
+    sprite_indices: Dict[int, int] = None
 ):
     _draw_arena_background(pantalla)
 
@@ -670,6 +677,8 @@ def draw_game_screen(
         nombres_jugadores = {}
     if jugadores_invencibles is None:
         jugadores_invencibles = {}
+    if sprite_indices is None:
+        sprite_indices = {}
 
     # Jugadores remotos
     for pid, pos in estado_jugadores.items():
@@ -686,7 +695,8 @@ def draw_game_screen(
         if esta_danado and dano_img and not es_invencible:
             imagen_a_dibujar = dano_img
         else:
-            imagen_a_dibujar = _load_jugador_image(pid)
+            sprite_idx = sprite_indices.get(pid)
+            imagen_a_dibujar = _load_jugador_image(pid, sprite_idx)
 
         if imagen_a_dibujar:
             rect_jugador = imagen_a_dibujar.get_rect()
@@ -727,7 +737,8 @@ def draw_game_screen(
         if esta_danado_local and dano_img and not es_invencible_local:
             imagen_a_dibujar_local = dano_img
         else:
-            imagen_a_dibujar_local = _load_jugador_image(player_id)
+            sprite_idx_local = sprite_indices.get(player_id)
+            imagen_a_dibujar_local = _load_jugador_image(player_id, sprite_idx_local)
 
         if imagen_a_dibujar_local:
             rect_jugador_local = imagen_a_dibujar_local.get_rect()
@@ -840,9 +851,22 @@ def draw_game_over_screen(
         pantalla.blit(linea, (panel_x + 40, y))
         y += 26
 
-    texto_instr = FONT_TEXTO.render("Cierra la ventana para salir.", True, (255, 255, 255))
-    pantalla.blit(
-        texto_instr,
-        (panel_x + (panel_width - texto_instr.get_width()) // 2,
-         panel_y + panel_height - 50)
-    )
+    # Botones al final
+    boton_y = panel_y + panel_height - 70
+    boton_h = 45
+    boton_w = 180
+    espacio = 30
+
+    boton_volver_x = panel_x + (panel_width - (boton_w * 2 + espacio)) // 2
+    boton_volver_rect = pygame.Rect(boton_volver_x, boton_y, boton_w, boton_h)
+    pygame.draw.rect(pantalla, (0, 150, 0), boton_volver_rect, border_radius=5)
+    texto_volver = FONT_SUBTITULO.render("Volver a jugar", True, (255, 255, 255))
+    pantalla.blit(texto_volver, (boton_volver_x + (boton_w - texto_volver.get_width()) // 2, boton_y + 12))
+
+    boton_cerrar_x = boton_volver_x + boton_w + espacio
+    boton_cerrar_rect = pygame.Rect(boton_cerrar_x, boton_y, boton_w, boton_h)
+    pygame.draw.rect(pantalla, (180, 50, 50), boton_cerrar_rect, border_radius=5)
+    texto_cerrar = FONT_SUBTITULO.render("Cerrar", True, (255, 255, 255))
+    pantalla.blit(texto_cerrar, (boton_cerrar_x + (boton_w - texto_cerrar.get_width()) // 2, boton_y + 12))
+
+    return boton_volver_rect, boton_cerrar_rect

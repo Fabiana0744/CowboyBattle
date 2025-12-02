@@ -73,6 +73,9 @@ async def cliente():
     # Jugadores invencibles: player_id -> tiempo_restante
     jugadores_invencibles: Dict[int, float] = {}
 
+    # Mapeo de sprite_index por jugador: player_id -> sprite_index (1, 2 o 3)
+    sprite_indices: Dict[int, int] = {}
+
     # Control de disparo: solo permitir un disparo a la vez
     puede_disparar = True
     ultima_direccion_movimiento = "up"
@@ -315,6 +318,69 @@ async def cliente():
                                 print(mensaje_error)
                         else:
                             mensaje_error = "Por favor ingresa un código"
+                
+                # ---- Clicks en pantalla de game over ----
+                elif evento.type == pygame.MOUSEBUTTONDOWN and game_over:
+                    mouse_pos = pygame.mouse.get_pos()
+                    # Construir diccionario de nombres para obtener los rectángulos
+                    nombres_jugadores_temp = {}
+                    if estado_sala and "jugadores" in estado_sala:
+                        for pid_str, info in estado_sala["jugadores"].items():
+                            pid = int(pid_str)
+                            nombre = info.get("nombre", f"P{pid}")
+                            nombres_jugadores_temp[pid] = nombre
+                    
+                    boton_volver_rect, boton_cerrar_rect = theme.draw_game_over_screen(
+                        pantalla,
+                        ANCHO_VENTANA,
+                        ALTO_VENTANA,
+                        ganador_id,
+                        puntuacion,
+                        nombres_jugadores_temp,
+                    )
+
+                    # Botón "Volver a jugar" - resetear y volver al menú principal
+                    if boton_volver_rect.collidepoint(mouse_pos):
+                        print("🔄 Volviendo al menú principal...")
+                        # Cerrar conexión WebSocket si existe
+                        if websocket is not None:
+                            try:
+                                await websocket.close()
+                            except:
+                                pass
+                            websocket = None
+                        
+                        # Resetear estado del juego
+                        game_over = False
+                        en_juego = False
+                        en_lobby = False
+                        en_menu_principal = True
+                        player_id = None
+                        es_host = False
+                        codigo_sala = None
+                        estado_sala = {}
+                        estado_jugadores = {}
+                        estado_balas = {}
+                        puntuacion = {}
+                        ganador_id = None
+                        yo_listo = False
+                        jugadores_danados = {}
+                        estrella_pos = None
+                        jugadores_invencibles = {}
+                        sprite_indices = {}
+                        nombre_jugador = ""  # Resetear nombre para volver a ingresar
+                        texto_ingresado = ""
+                        mensaje_error = None
+
+                    # Botón "Cerrar" - salir del juego
+                    elif boton_cerrar_rect.collidepoint(mouse_pos):
+                        print("👋 Cerrando el juego...")
+                        corriendo = False
+                        if websocket is not None:
+                            try:
+                                await websocket.close()
+                            except:
+                                pass
 
             # ------------------------------
             # Movimiento del jugador local
@@ -432,7 +498,13 @@ async def cliente():
                             player_id = datos.get("player_id")
                             es_host = datos.get("es_host", False)
                             codigo_sala = datos.get("codigo_sala")
-                            print(f"✅ Player ID asignado: {player_id} (Host: {es_host}) - Sala: {codigo_sala}")
+                            sprite_index = datos.get("sprite_index")
+                            
+                            # Guardar sprite_index del jugador local
+                            if sprite_index is not None:
+                                sprite_indices[player_id] = sprite_index
+                            
+                            print(f"✅ Player ID asignado: {player_id} (Host: {es_host}) - Sala: {codigo_sala} - Sprite: {sprite_index}")
 
                             # Cambiar a estado de lobby
                             en_menu_principal = False
@@ -577,8 +649,15 @@ async def cliente():
                             if "codigo_sala" in datos:
                                 codigo_sala = datos.get("codigo_sala")
 
+                            # Actualizar sprite_indices de todos los jugadores
+                            jugadores_sala = datos.get("jugadores", {})
+                            for pid_str, info in jugadores_sala.items():
+                                pid = int(pid_str)
+                                sprite_idx = info.get("sprite_index")
+                                if sprite_idx is not None:
+                                    sprite_indices[pid] = sprite_idx
+
                             if player_id is not None:
-                                jugadores_sala = datos.get("jugadores", {})
                                 if str(player_id) in jugadores_sala:
                                     yo_listo = jugadores_sala[str(player_id)].get("listo", False)
                                 host_id_sala = datos.get("host_id")
@@ -664,7 +743,7 @@ async def cliente():
                         nombre = info.get("nombre", f"P{pid}")
                         nombres_jugadores[pid] = nombre
                 
-                theme.draw_game_over_screen(
+                boton_volver_rect, boton_cerrar_rect = theme.draw_game_over_screen(
                     pantalla,
                     ANCHO_VENTANA,
                     ALTO_VENTANA,
@@ -685,6 +764,10 @@ async def cliente():
                         pid = int(pid_str)
                         nombre = info.get("nombre", f"P{pid}")
                         nombres_jugadores[pid] = nombre
+                        # También actualizar sprite_index si está disponible
+                        sprite_idx = info.get("sprite_index")
+                        if sprite_idx is not None:
+                            sprite_indices[pid] = sprite_idx
 
                 # Dibujar pantalla de juego con todos los estados
                 theme.draw_game_screen(
@@ -701,6 +784,7 @@ async def cliente():
                     nombres_jugadores,
                     estrella_pos,
                     jugadores_invencibles,
+                    sprite_indices,
                 )
 
             pygame.display.flip()
