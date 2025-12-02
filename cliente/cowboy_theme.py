@@ -8,11 +8,11 @@ from typing import Dict, Any, List
 TAMAÑO_CUADRADO = 60  # Tamaño de los jugadores
 TAMAÑO_BALA = 8
 
-# Tamaño del barril (más alto que ancho, como en la imagen)
+# Tamaño del barril
 BARRIL_ANCHO = 55
 BARRIL_ALTO = 85
 
-# Tamaño del cactus (más alto que ancho, rectangular)
+# Tamaño del cactus
 CACTUS_ANCHO = 50
 CACTUS_ALTO = 80
 
@@ -33,14 +33,12 @@ _CACTUS_IMAGE: pygame.Surface | None = None
 _ESTRELLA_IMAGE: pygame.Surface | None = None
 
 # Mapeo tipo -> archivo de sprite del barril
-# Asegúrate de tener estos archivos en: proyecto/assets/barril1.png, barril2.png
 _BARRIL_SPRITES = {
     "barril_marron": "barril2.png",   # el más oscuro
     "barril_naranja": "barril1.png",  # el más anaranjado
 }
 
 # Lista de obstáculos fijos del mapa
-# Puedes cambiar posiciones y cantidad a tu gusto
 OBSTACULOS = [
     {"tipo": "barril_marron", "x": 400, "y": 300},
     {"tipo": "barril_naranja", "x": 120, "y": 410},
