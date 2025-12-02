@@ -22,7 +22,7 @@ ESTRELLA_TAMAÑO = 40
 # Colores base
 COLOR_JUGADOR_LOCAL = (0, 140, 255)   # Azul intenso
 COLOR_JUGADOR_OTRO = (255, 140, 0)    # Naranja
-COLOR_BALA = (255, 255, 0)            # Amarillo
+COLOR_BALA = (192, 192, 192)          # Plateado
 
 # Diccionarios de imágenes en caché
 # Clave: (imagen_num, tamaño)
