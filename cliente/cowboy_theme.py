@@ -610,10 +610,44 @@ def draw_lobby_screen(
             y_text += 28
 
     y_text = panel_y + panel_height - 120
+    
+    # Calcular si todos los jugadores están listos
+    todos_listos = True
+    num_jugadores = len(jugadores)
+    if num_jugadores > 0:
+        for pid_str, info in jugadores.items():
+            if not info.get("listo", False):
+                todos_listos = False
+                break
+    
+    # Si es el host, mostrar botón de iniciar partida
+    boton_iniciar_rect = None
     if es_host:
-        instr1 = FONT_TEXTO.render("Presiona ESPACIO para iniciar la partida", True, (255, 255, 0))
-        pantalla.blit(instr1, (panel_x + 20, y_text))
-        y_text += 30
+        boton_y = y_text
+        boton_h = 45
+        boton_w = 250
+        boton_x = panel_x + (panel_width - boton_w) // 2
+        
+        boton_iniciar_rect = pygame.Rect(boton_x, boton_y, boton_w, boton_h)
+        
+        # Color del botón: habilitado si todos están listos y hay al menos 2 jugadores
+        boton_habilitado = todos_listos and num_jugadores >= 2
+        color_boton = (0, 150, 0) if boton_habilitado else (100, 100, 100)
+        
+        pygame.draw.rect(pantalla, color_boton, boton_iniciar_rect, border_radius=5)
+        texto_boton = FONT_SUBTITULO.render("Iniciar Partida", True, (255, 255, 255))
+        pantalla.blit(texto_boton, (boton_x + (boton_w - texto_boton.get_width()) // 2, boton_y + 12))
+        
+        # Mensaje de ayuda
+        if not boton_habilitado:
+            if num_jugadores < 2:
+                msg_ayuda = "Se necesitan al menos 2 jugadores"
+            else:
+                msg_ayuda = "Todos los jugadores deben estar listos"
+            texto_ayuda = FONT_PEQUE.render(msg_ayuda, True, (255, 200, 100))
+            pantalla.blit(texto_ayuda, (panel_x + (panel_width - texto_ayuda.get_width()) // 2, boton_y + boton_h + 5))
+        
+        y_text += boton_h + 35
     else:
         instr1 = FONT_TEXTO.render("Esperando a que el host inicie la partida...", True, (255, 255, 255))
         pantalla.blit(instr1, (panel_x + 20, y_text))
@@ -623,6 +657,8 @@ def draw_lobby_screen(
     color_estado = (0, 255, 120) if yo_listo else (255, 120, 120)
     texto_estado = FONT_TEXTO.render(f"Tu estado: {estado_txt}", True, color_estado)
     pantalla.blit(texto_estado, (panel_x + 20, y_text))
+    
+    return boton_iniciar_rect
 
 
 # ------------------------------------------------------------

@@ -195,24 +195,6 @@ async def cliente():
                             except Exception as e:
                                 print(f"Error al enviar ready: {e}")
 
-                        # Iniciar partida (solo host, tecla ESPACIO mientras está en lobby)
-                        if (
-                            evento.key == pygame.K_SPACE
-                            and player_id is not None
-                            and en_lobby
-                            and es_host
-                            and websocket is not None
-                        ):
-                            mensaje_iniciar = {
-                                "tipo": "iniciar_partida",
-                                "player_id": player_id,
-                            }
-                            try:
-                                await websocket.send(json.dumps(mensaje_iniciar))
-                                print("🎮 Solicitando inicio de partida...")
-                            except Exception as e:
-                                print(f"Error al enviar iniciar_partida: {e}")
-
                 # ---- Clicks en el menú principal ----
                 elif evento.type == pygame.MOUSEBUTTONDOWN and en_menu_principal:
                     mouse_pos = pygame.mouse.get_pos()
@@ -318,6 +300,42 @@ async def cliente():
                                 print(mensaje_error)
                         else:
                             mensaje_error = "Por favor ingresa un código"
+                
+                # ---- Clicks en pantalla de lobby ----
+                elif evento.type == pygame.MOUSEBUTTONDOWN and en_lobby:
+                    mouse_pos = pygame.mouse.get_pos()
+                    # Dibujar de nuevo para obtener los rectángulos
+                    boton_iniciar_rect = theme.draw_lobby_screen(
+                        pantalla,
+                        ANCHO_VENTANA,
+                        ALTO_VENTANA,
+                        player_id,
+                        yo_listo,
+                        estado_sala,
+                        es_host,
+                        codigo_sala,
+                    )
+                    
+                    # Click en botón de iniciar partida (solo si es host y el botón está habilitado)
+                    if boton_iniciar_rect is not None and boton_iniciar_rect.collidepoint(mouse_pos):
+                        # Verificar que todos estén listos (verificación adicional en cliente)
+                        jugadores_sala = estado_sala.get("jugadores", {})
+                        todos_listos = len(jugadores_sala) >= 2
+                        for pid_str, info in jugadores_sala.items():
+                            if not info.get("listo", False):
+                                todos_listos = False
+                                break
+                        
+                        if todos_listos and player_id is not None and es_host and websocket is not None:
+                            mensaje_iniciar = {
+                                "tipo": "iniciar_partida",
+                                "player_id": player_id,
+                            }
+                            try:
+                                await websocket.send(json.dumps(mensaje_iniciar))
+                                print("🎮 Solicitando inicio de partida...")
+                            except Exception as e:
+                                print(f"Error al enviar iniciar_partida: {e}")
                 
                 # ---- Clicks en pantalla de game over ----
                 elif evento.type == pygame.MOUSEBUTTONDOWN and game_over:
@@ -723,7 +741,7 @@ async def cliente():
                 )
 
             elif en_lobby:
-                theme.draw_lobby_screen(
+                boton_iniciar_rect = theme.draw_lobby_screen(
                     pantalla,
                     ANCHO_VENTANA,
                     ALTO_VENTANA,

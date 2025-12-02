@@ -570,6 +570,30 @@ async def manejar_cliente(websocket: Any):
                             }))
                             continue
                         
+                        # Verificar que todos los jugadores estén listos
+                        todos_listos = True
+                        jugadores_no_listos = []
+                        for pid in ids_actuales:
+                            if pid not in sala["jugadores_listos"] or not sala["jugadores_listos"][pid]:
+                                todos_listos = False
+                                # Buscar el nombre correcto del jugador
+                                nombre = f"Jugador {pid}"
+                                for ws, info in sala["jugadores_info"].items():
+                                    if info["id"] == pid:
+                                        nombre = info.get("nombre", f"Jugador {pid}")
+                                        break
+                                jugadores_no_listos.append(nombre)
+                        
+                        if not todos_listos:
+                            mensaje_error = "Todos los jugadores deben estar listos para iniciar"
+                            if jugadores_no_listos:
+                                mensaje_error += f". No listos: {', '.join(jugadores_no_listos)}"
+                            await websocket.send(json.dumps({
+                                "tipo": "error",
+                                "mensaje": mensaje_error
+                            }))
+                            continue
+                        
                         # Resetear puntuación y posiciones en esta sala
                         for idx, pid in enumerate(ids_actuales):
                             sala["puntuacion"][pid] = 0
