@@ -192,7 +192,7 @@ async def cliente():
                             }
                             try:
                                 await websocket.send(json.dumps(mensaje_ready))
-                                print(f"📥 Enviado estado listo: {yo_listo}")
+                                print(f"Enviado estado listo: {yo_listo}")
                             except Exception as e:
                                 print(f"Error al enviar ready: {e}")
 
@@ -334,7 +334,7 @@ async def cliente():
                             }
                             try:
                                 await websocket.send(json.dumps(mensaje_iniciar))
-                                print("🎮 Solicitando inicio de partida...")
+                                print("Solicitando inicio de partida...")
                             except Exception as e:
                                 print(f"Error al enviar iniciar_partida: {e}")
                 
@@ -361,7 +361,7 @@ async def cliente():
 
                     # Botón "Volver a jugar" - resetear y volver al menú principal
                     if boton_volver_rect.collidepoint(mouse_pos):
-                        print("🔄 Volviendo al menú principal...")
+                        print("Volviendo al menú principal...")
                         # Cerrar conexión WebSocket si existe
                         if websocket is not None:
                             try:
@@ -395,7 +395,7 @@ async def cliente():
 
                     # Botón "Cerrar" - salir del juego
                     elif boton_cerrar_rect.collidepoint(mouse_pos):
-                        print("👋 Cerrando el juego...")
+                        print("Cerrando el juego...")
                         corriendo = False
                         if websocket is not None:
                             try:
@@ -467,7 +467,7 @@ async def cliente():
                 }
                 try:
                     await websocket.send(json.dumps(mensaje_shoot))
-                    print(f"💥 Disparo enviado: {direccion_disparo}")
+                    print(f"Disparo enviado: {direccion_disparo}")
                     disparo_solicitado = False
                 except Exception as e:
                     print(f"Error al enviar disparo: {e}")
@@ -525,7 +525,7 @@ async def cliente():
                             if sprite_index is not None:
                                 sprite_indices[player_id] = sprite_index
                             
-                            print(f"✅ Player ID asignado: {player_id} (Host: {es_host}) - Sala: {codigo_sala} - Sprite: {sprite_index}")
+                            print(f"Player ID asignado: {player_id} (Host: {es_host}) - Sala: {codigo_sala} - Sprite: {sprite_index}")
 
                             # Cambiar a estado de lobby
                             en_menu_principal = False
@@ -536,7 +536,7 @@ async def cliente():
                             x = datos.get("x", x)
                             y = datos.get("y", y)
                             posicion_anterior = (x, y)
-                            print(f"📍 Posición inicial asignada: ({x}, {y})")
+                            print(f"Posición inicial asignada: ({x}, {y})")
 
                         # --- Error del servidor ---
                         elif tipo_msg == "error":
@@ -569,7 +569,7 @@ async def cliente():
                                 dist_respawn = math.sqrt((x - servidor_x) ** 2 + (y - servidor_y) ** 2)
                                 if dist_respawn > 50:
                                     print(
-                                        f"🔄 Respawn/corrección detectado! "
+                                        f"Respawn/corrección detectado! "
                                         f"({x}, {y}) -> ({servidor_x}, {servidor_y})"
                                     )
                                     x = servidor_x
@@ -647,7 +647,7 @@ async def cliente():
                                         if jugador_mas_cercano is not None:
                                             jugadores_danados[jugador_mas_cercano] = tiempo_actual_impacto
                                             print(
-                                                f"💥 Jugador {jugador_mas_cercano} fue golpeado! "
+                                                f"Jugador {jugador_mas_cercano} fue golpeado! "
                                                 f"Mostrando imagen de daño"
                                             )
 
@@ -689,7 +689,7 @@ async def cliente():
                             en_lobby = False
                             en_juego = True
                             game_over = False
-                            print("🎮 ¡Comienza la partida!")
+                            print("¡Comienza la partida!")
                             puede_disparar = True
 
                         # --- Game over ---

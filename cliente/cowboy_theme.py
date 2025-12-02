@@ -835,7 +835,7 @@ def draw_game_screen(
             color_local = (255, 215, 0) if es_invencible_local and mostrar_brillo_local else COLOR_JUGADOR_LOCAL
             pygame.draw.rect(pantalla, color_local, rect_local, border_radius=8)
 
-        label_local_texto = "Tú ⭐" if es_invencible_local else "Tú"
+        label_local_texto = "Tú [INV]" if es_invencible_local else "Tú"
         color_label_local = (255, 215, 0) if es_invencible_local else (255, 255, 255)
         label_local = FONT_PEQUE.render(label_local_texto, True, color_label_local)
         pantalla.blit(label_local, (x_local_int - label_local.get_width() // 2,

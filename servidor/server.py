@@ -878,7 +878,7 @@ async def loop_generar_estrellas():
                             "tiempo_creacion": tiempo_actual
                         }
                         sala["ultima_estrella_tiempo"] = tiempo_actual
-                        print(f"⭐ Nueva estrella generada en sala {codigo_sala} en ({pos[0]:.1f}, {pos[1]:.1f})")
+                        print(f"Nueva estrella generada en sala {codigo_sala} en ({pos[0]:.1f}, {pos[1]:.1f})")
                 elif sala["estrella_actual"] is not None:
                     # Actualizar detección de recogida para esta sala
                     await actualizar_estrellas_sala(codigo_sala)
