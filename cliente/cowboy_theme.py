@@ -559,8 +559,8 @@ def draw_lobby_screen(
 ):
     _draw_background_cowboy(pantalla)
 
-    panel_width = int(ancho * 0.7)
-    panel_height = int(alto * 0.6)
+    panel_width = int(ancho * 0.75)  # Aumentado de 0.7 a 0.75
+    panel_height = int(alto * 0.80)  # Aumentado de 0.75 a 0.80 para más espacio
     panel_x = (ancho - panel_width) // 2
     panel_y = (alto - panel_height) // 2
     _draw_panel(pantalla, panel_x, panel_y, panel_width, panel_height, alpha=200)
@@ -579,7 +579,15 @@ def draw_lobby_screen(
         pantalla.blit(instruccion_codigo, (panel_x + 20, panel_y + 85))
 
     jugadores = estado_sala.get("jugadores", {})
-    y_text = panel_y + 120
+    
+    # Área reservada para la lista de jugadores (con límite máximo)
+    lista_y_inicio = panel_y + 110  # Un poco más arriba
+    # Área reservada para controles en la parte inferior (más espacio)
+    area_controles_altura = 180 if es_host else 100
+    lista_y_fin = panel_y + panel_height - area_controles_altura
+    area_lista_disponible = lista_y_fin - lista_y_inicio
+    
+    y_text = lista_y_inicio
 
     if not jugadores:
         texto = FONT_TEXTO.render("Esperando jugadores que se conecten...", True, (255, 255, 255))
@@ -588,9 +596,31 @@ def draw_lobby_screen(
     else:
         encabezado = FONT_SUBTITULO.render("Jugadores en la sala:", True, (255, 255, 255))
         pantalla.blit(encabezado, (panel_x + 20, y_text))
-        y_text += 35
+        y_text += 32  # Reducido de 35 a 32
 
-        for pid_str, info in jugadores.items():
+        # Espaciado optimizado entre jugadores
+        espaciado_jugador = 24  # Balanceado para legibilidad y espacio
+        
+        lista_jugadores = list(jugadores.items())
+        
+        # Calcular cuántos jugadores caben en el espacio disponible
+        altura_encabezado = 32
+        espacio_total_disponible = area_lista_disponible - altura_encabezado
+        max_jugadores_visibles = max(1, int(espacio_total_disponible / espaciado_jugador))
+        
+        for idx, (pid_str, info) in enumerate(lista_jugadores):
+            # Si excedemos el área disponible, mostrar mensaje
+            if idx >= max_jugadores_visibles:
+                jugadores_restantes = len(lista_jugadores) - idx
+                if jugadores_restantes > 0:
+                    texto_mas = FONT_PEQUE.render(
+                        f"... y {jugadores_restantes} jugador{'es' if jugadores_restantes > 1 else ''} más",
+                        True,
+                        (200, 200, 200)
+                    )
+                    pantalla.blit(texto_mas, (panel_x + 40, y_text))
+                break
+            
             nombre = info.get("nombre", f"Jugador {pid_str}")
             listo = info.get("listo", False)
 
@@ -607,9 +637,20 @@ def draw_lobby_screen(
                 color_nombre
             )
             pantalla.blit(texto_jugador, (panel_x + 40, y_text))
-            y_text += 28
+            y_text += espaciado_jugador
+        
+        # Línea separadora antes del área de controles
+        separador_y = lista_y_fin - 10
+        pygame.draw.line(
+            pantalla,
+            (100, 100, 100),
+            (panel_x + 20, separador_y),
+            (panel_x + panel_width - 20, separador_y),
+            1
+        )
 
-    y_text = panel_y + panel_height - 120
+    # Área de controles siempre en la parte inferior (posición fija, después del separador)
+    y_controles = panel_y + panel_height - area_controles_altura + 15  # Después de la línea separadora
     
     # Calcular si todos los jugadores están listos
     todos_listos = True
@@ -620,13 +661,20 @@ def draw_lobby_screen(
                 todos_listos = False
                 break
     
+    # Estado personal primero
+    estado_txt = "LISTO" if yo_listo else "No listo"
+    color_estado = (0, 255, 120) if yo_listo else (255, 120, 120)
+    texto_estado = FONT_TEXTO.render(f"Tu estado: {estado_txt}", True, color_estado)
+    pantalla.blit(texto_estado, (panel_x + 20, y_controles))
+    y_controles += 30
+    
     # Si es el host, mostrar botón de iniciar partida
     boton_iniciar_rect = None
     if es_host:
-        boton_y = y_text
         boton_h = 45
         boton_w = 250
         boton_x = panel_x + (panel_width - boton_w) // 2
+        boton_y = y_controles + 5  # Un poco de espacio después del estado
         
         boton_iniciar_rect = pygame.Rect(boton_x, boton_y, boton_w, boton_h)
         
@@ -646,17 +694,9 @@ def draw_lobby_screen(
                 msg_ayuda = "Todos los jugadores deben estar listos"
             texto_ayuda = FONT_PEQUE.render(msg_ayuda, True, (255, 200, 100))
             pantalla.blit(texto_ayuda, (panel_x + (panel_width - texto_ayuda.get_width()) // 2, boton_y + boton_h + 5))
-        
-        y_text += boton_h + 35
     else:
         instr1 = FONT_TEXTO.render("Esperando a que el host inicie la partida...", True, (255, 255, 255))
-        pantalla.blit(instr1, (panel_x + 20, y_text))
-        y_text += 30
-
-    estado_txt = "LISTO" if yo_listo else "No listo"
-    color_estado = (0, 255, 120) if yo_listo else (255, 120, 120)
-    texto_estado = FONT_TEXTO.render(f"Tu estado: {estado_txt}", True, color_estado)
-    pantalla.blit(texto_estado, (panel_x + 20, y_text))
+        pantalla.blit(instr1, (panel_x + 20, y_controles))
     
     return boton_iniciar_rect
 

@@ -80,7 +80,6 @@ def generar_codigo_sala() -> str:
 def obtener_sala_de_websocket(websocket: Any) -> str | None:
     """Obtiene el código de sala de un websocket."""
     return websocket_a_sala.get(websocket)
-    return websocket_a_sala.get(websocket)
 
 
 def obtener_info_sala(codigo_sala: str) -> Dict[str, Any] | None:
@@ -207,6 +206,7 @@ async def enviar_evento_a_sala(codigo_sala: str, evento: dict):
     sala = obtener_info_sala(codigo_sala)
     if not sala or not sala["jugadores"]:
         return
+    
     mensaje = json.dumps(evento)
     tareas = [ws.send(mensaje) for ws in sala["jugadores"]]
     await asyncio.gather(*tareas, return_exceptions=True)
@@ -827,7 +827,7 @@ async def loop_actualizacion_balas():
                 # Actualizar balas de esta sala si existen
                 if sala["balas"]:
                     await actualizar_balas_sala(codigo_sala)
-                # Enviar estado frecuentemente durante partida
+            # Enviar estado frecuentemente durante partida
                 await enviar_estado_a_sala(codigo_sala)
             elif sala["estado_partida"] in ["lobby", "game_over"]:
                 # En lobby/game_over, enviar estado periódicamente
