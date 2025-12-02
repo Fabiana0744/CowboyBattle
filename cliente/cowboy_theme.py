@@ -881,7 +881,8 @@ def draw_game_over_screen(
     alto: int,
     ganador_id: int | None,
     puntuacion: Dict[int, int],
-    nombres_jugadores: Dict[int, str] = None
+    nombres_jugadores: Dict[int, str] = None,
+    motivo_victoria: str = None
 ):
     _draw_background_cowboy(pantalla)
 
@@ -899,11 +900,18 @@ def draw_game_over_screen(
 
     if ganador_id is not None:
         nombre_ganador = nombres_jugadores.get(ganador_id, f"P{ganador_id}")
-        texto_ganador = FONT_SUBTITULO.render(
-            f"Ganador: {nombre_ganador}",
-            True,
-            (0, 255, 140)
-        )
+        if motivo_victoria == "abandono":
+            texto_ganador = FONT_SUBTITULO.render(
+                f"Ganador: {nombre_ganador} (Victoria por abandono)",
+                True,
+                (255, 200, 0)
+            )
+        else:
+            texto_ganador = FONT_SUBTITULO.render(
+                f"Ganador: {nombre_ganador}",
+                True,
+                (0, 255, 140)
+            )
     else:
         texto_ganador = FONT_SUBTITULO.render(
             "Empate o sin ganador",

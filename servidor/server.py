@@ -295,7 +295,7 @@ async def actualizar_balas_sala(codigo_sala: str):
             if (obs_rect_left <= bx <= obs_rect_right and 
                 obs_rect_top <= by <= obs_rect_bottom):
                 # La bala chocó con un obstáculo, eliminarla
-                print(f"💥 Bala {bala_id} chocó con {nombre_obs} en ({obs_x}, {obs_y})")
+                print(f"Bala {bala_id} chocó con {nombre_obs} en ({obs_x}, {obs_y})")
                 balas_a_eliminar.append(bala_id)
                 break  # Ya no seguimos revisando esta bala
         
@@ -315,7 +315,7 @@ async def actualizar_balas_sala(codigo_sala: str):
             
             dist = math.hypot(pos["x"] - bx, pos["y"] - by)
             if dist <= RADIO_IMPACTO:
-                print(f"💥 Impacto! Jugador {owner_id} golpea a {pid} en sala {codigo_sala}")
+                print(f"Impacto! Jugador {owner_id} golpea a {pid} en sala {codigo_sala}")
                 sala["puntuacion"][owner_id] = sala["puntuacion"].get(owner_id, 0) + 1
                 balas_a_eliminar.append(bala_id)
                 
@@ -352,7 +352,7 @@ async def actualizar_estrellas_sala(codigo_sala: str):
             
             if dist <= radio_recogida:
                 # El jugador recogió la estrella
-                print(f"⭐ Jugador {pid} recogió la estrella en sala {codigo_sala}! Invencible por {DURACION_INVENCIBILIDAD}s")
+                print(f"Jugador {pid} recogió la estrella en sala {codigo_sala}! Invencible por {DURACION_INVENCIBILIDAD}s")
                 sala["jugadores_invencibles"][pid] = tiempo_actual + DURACION_INVENCIBILIDAD
                 sala["estrella_actual"] = None  # La estrella desaparece
                 break
@@ -756,14 +756,64 @@ async def manejar_cliente(websocket: Any):
                 nombre = jugador_info.get("nombre", "Desconocido")
                 print(f"Jugador desconectado: {nombre} (ID: {player_id}) de sala {codigo_sala_desconexion}")
                 
-                # Si el host se desconecta, eliminar toda la sala
+                # Remover el jugador de la sala (ya sea host o no)
                 if player_id == sala["host_id"]:
-                    print(f"El host se desconectó, eliminando sala {codigo_sala_desconexion}")
-                    del salas[codigo_sala_desconexion]
-                    # Limpiar mapeo de websockets de esta sala
-                    for ws in sala["jugadores"]:
-                        if ws in websocket_a_sala:
-                            del websocket_a_sala[ws]
+                    # Si es el host, verificar si hay partida en curso
+                    if sala["estado_partida"] == "jugando":
+                        # Si está en partida, remover al host como a cualquier jugador
+                        if websocket in sala["jugadores"]:
+                            sala["jugadores"].remove(websocket)
+                        if websocket in sala["jugadores_info"]:
+                            del sala["jugadores_info"][websocket]
+                        if player_id in sala["estado"]:
+                            del sala["estado"][player_id]
+                        if player_id in sala["jugadores_listos"]:
+                            del sala["jugadores_listos"][player_id]
+                        if player_id in sala["puntuacion"]:
+                            del sala["puntuacion"][player_id]
+                        if player_id in sala["jugadores_invencibles"]:
+                            del sala["jugadores_invencibles"][player_id]
+                        
+                        # Remover mapeo de websocket a sala
+                        if websocket in websocket_a_sala:
+                            del websocket_a_sala[websocket]
+                        
+                        # Verificar si solo queda un jugador
+                        if len(sala["jugadores"]) == 1:
+                            # El jugador restante gana por abandono
+                            jugador_restante_ws = sala["jugadores"][0]
+                            jugador_restante_info = sala["jugadores_info"].get(jugador_restante_ws)
+                            if jugador_restante_info:
+                                jugador_restante_id = jugador_restante_info["id"]
+                                jugador_restante_nombre = jugador_restante_info.get("nombre", "Desconocido")
+                                print(f"Host desconectado. Jugador {jugador_restante_nombre} (ID: {jugador_restante_id}) gana por abandono en sala {codigo_sala_desconexion}")
+                                
+                                sala["estado_partida"] = "game_over"
+                                
+                                await enviar_evento_a_sala(codigo_sala_desconexion, {
+                                    "tipo": "game_over",
+                                    "ganador": jugador_restante_id,
+                                    "puntuacion": sala["puntuacion"],
+                                    "motivo": "abandono"
+                                })
+                                # Enviar estado final
+                                await enviar_estado_a_sala(codigo_sala_desconexion)
+                        else:
+                            # Si quedan más jugadores, eliminar la sala
+                            print(f"El host se desconectó durante partida con múltiples jugadores, eliminando sala {codigo_sala_desconexion}")
+                            del salas[codigo_sala_desconexion]
+                            # Limpiar mapeo de websockets de esta sala
+                            for ws in sala["jugadores"]:
+                                if ws in websocket_a_sala:
+                                    del websocket_a_sala[ws]
+                    else:
+                        # Si está en lobby, eliminar toda la sala
+                        print(f"El host se desconectó, eliminando sala {codigo_sala_desconexion}")
+                        del salas[codigo_sala_desconexion]
+                        # Limpiar mapeo de websockets de esta sala
+                        for ws in sala["jugadores"]:
+                            if ws in websocket_a_sala:
+                                del websocket_a_sala[ws]
                 else:
                     # Remover el jugador de la sala
                     if websocket in sala["jugadores"]:
@@ -776,10 +826,31 @@ async def manejar_cliente(websocket: Any):
                         del sala["jugadores_listos"][player_id]
                     if player_id in sala["puntuacion"]:
                         del sala["puntuacion"][player_id]
+                    if player_id in sala["jugadores_invencibles"]:
+                        del sala["jugadores_invencibles"][player_id]
                     
                     # Remover mapeo de websocket a sala
                     if websocket in websocket_a_sala:
                         del websocket_a_sala[websocket]
+                    
+                    # Verificar si solo queda un jugador en una partida en curso
+                    if sala["estado_partida"] == "jugando" and len(sala["jugadores"]) == 1:
+                        # El jugador restante gana por abandono
+                        jugador_restante_ws = sala["jugadores"][0]
+                        jugador_restante_info = sala["jugadores_info"].get(jugador_restante_ws)
+                        if jugador_restante_info:
+                            jugador_restante_id = jugador_restante_info["id"]
+                            jugador_restante_nombre = jugador_restante_info.get("nombre", "Desconocido")
+                            print(f"Jugador {jugador_restante_nombre} (ID: {jugador_restante_id}) gana por abandono en sala {codigo_sala_desconexion}")
+                            
+                            sala["estado_partida"] = "game_over"
+                            
+                            await enviar_evento_a_sala(codigo_sala_desconexion, {
+                                "tipo": "game_over",
+                                "ganador": jugador_restante_id,
+                                "puntuacion": sala["puntuacion"],
+                                "motivo": "abandono"
+                            })
                     
                     # Notificar a los demás jugadores de la sala del cambio de estado
                     if sala["jugadores"]:

@@ -48,6 +48,7 @@ async def cliente():
     # Info básica de la sala (para mostrar nombres/estados)
     estado_sala = {}
     ganador_id = None
+    motivo_victoria = None  # "abandono" o None para victoria normal
 
     # Estado de todos los jugadores recibido del servidor
     # Clave: player_id, Valor: {"x": x, "y": y}
@@ -355,6 +356,7 @@ async def cliente():
                         ganador_id,
                         puntuacion,
                         nombres_jugadores_temp,
+                        motivo_victoria,
                     )
 
                     # Botón "Volver a jugar" - resetear y volver al menú principal
@@ -381,6 +383,7 @@ async def cliente():
                         estado_balas = {}
                         puntuacion = {}
                         ganador_id = None
+                        motivo_victoria = None
                         yo_listo = False
                         jugadores_danados = {}
                         estrella_pos = None
@@ -694,11 +697,15 @@ async def cliente():
                             game_over = True
                             en_juego = False
                             ganador_id = datos.get("ganador")
+                            motivo_victoria = datos.get("motivo")  # "abandono" o None
                             puntuacion_recibida = datos.get("puntuacion", {})
                             puntuacion = {
                                 int(pid): score for pid, score in puntuacion_recibida.items()
                             }
-                            print(f"🏁 Game over. Ganador: Jugador {ganador_id}")
+                            if motivo_victoria == "abandono":
+                                print(f"Game over por abandono. Ganador: Jugador {ganador_id}")
+                            else:
+                                print(f"Game over. Ganador: Jugador {ganador_id}")
 
                     except json.JSONDecodeError:
                         print(f"Mensaje recibido (texto plano): {mensaje}")
@@ -768,6 +775,7 @@ async def cliente():
                     ganador_id,
                     puntuacion,
                     nombres_jugadores,
+                    motivo_victoria,
                 )
 
             else:
