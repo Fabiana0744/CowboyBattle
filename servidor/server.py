@@ -31,7 +31,7 @@ TAMAÑO_JUGADOR = 60
 # Lista de obstáculos fijos del mapa (debe coincidir con el cliente)
 OBSTACULOS = [
     {"tipo": "barril_marron", "x": 400, "y": 300},
-    {"tipo": "barril_naranja", "x": 260, "y": 210},
+    {"tipo": "barril_naranja", "x": 70, "y": 100},
     {"tipo": "barril_marron", "x": 540, "y": 210},
     {"tipo": "cactus", "x": 150, "y": 150},
     {"tipo": "cactus", "x": 650, "y": 450},

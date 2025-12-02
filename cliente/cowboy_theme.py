@@ -43,9 +43,9 @@ _BARRIL_SPRITES = {
 # Puedes cambiar posiciones y cantidad a tu gusto
 OBSTACULOS = [
     {"tipo": "barril_marron", "x": 400, "y": 300},
-    {"tipo": "barril_naranja", "x": 260, "y": 210},
+    {"tipo": "barril_naranja", "x": 120, "y": 410},
     {"tipo": "barril_marron", "x": 540, "y": 210},
-    {"tipo": "cactus", "x": 150, "y": 150},
+    {"tipo": "cactus", "x": 150, "y": 140},
     {"tipo": "cactus", "x": 650, "y": 450},
     {"tipo": "cactus", "x": 400, "y": 100},
 ]
