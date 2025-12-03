@@ -594,7 +594,7 @@ def draw_lobby_screen(
     else:
         encabezado = FONT_SUBTITULO.render("Jugadores en la sala:", True, (255, 255, 255))
         pantalla.blit(encabezado, (panel_x + 20, y_text))
-        y_text += 32  # Reducido de 35 a 32
+        y_text += 32
 
         # Espaciado optimizado entre jugadores
         espaciado_jugador = 24  # Balanceado para legibilidad y espacio
