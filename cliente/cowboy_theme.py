@@ -887,8 +887,21 @@ def draw_game_over_screen(
     if nombres_jugadores is None:
         nombres_jugadores = {}
 
+    # Calcular altura del panel dinámicamente basado en número de jugadores
+    # Altura base: título + ganador + encabezado + espacio
+    altura_base = 130 + 35 + 20  # título + ganador + encabezado + margen superior
+    altura_por_jugador = 26  # altura de cada línea de jugador
+    altura_botones = 45 + 20  # altura de botones + margen inferior
+    espacio_entre_nombres_botones = 50  # espacio entre nombres y botones
+    
+    num_jugadores = len(puntuacion)
+    panel_height = altura_base + (num_jugadores * altura_por_jugador) + espacio_entre_nombres_botones + altura_botones
+    
+    # Asegurar altura mínima y máxima
+    panel_height = max(panel_height, int(alto * 0.5))  # Mínimo 50% de la pantalla
+    panel_height = min(panel_height, int(alto * 0.75))  # Máximo 75% de la pantalla
+    
     panel_width = int(ancho * 0.6)
-    panel_height = int(alto * 0.5)
     panel_x = (ancho - panel_width) // 2
     panel_y = (alto - panel_height) // 2
     _draw_panel(pantalla, panel_x, panel_y, panel_width, panel_height, alpha=220)
@@ -933,8 +946,13 @@ def draw_game_over_screen(
         pantalla.blit(linea, (panel_x + 40, y))
         y += 26
 
-    # Botones al final
-    boton_y = panel_y + panel_height - 70
+    # Botones al final - calcular posición dinámicamente basado en número de jugadores
+    # Asegurar al menos 50 píxeles de espacio después del último nombre
+    # Y que queden dentro del panel con un margen inferior de 20 píxeles
+    espacio_minimo = 50
+    boton_y = y + espacio_minimo
+    # Asegurar que los botones queden dentro del panel
+    boton_y = min(boton_y, panel_y + panel_height - 45 - 20)  # altura botón + margen inferior
     boton_h = 45
     boton_w = 180
     espacio = 30

@@ -44,6 +44,7 @@ async def cliente():
     en_juego = False
     game_over = False
     yo_listo = False
+    necesita_sincronizar_posicion_inicial = False  # Bandera para sincronizar posición al iniciar partida
 
     # Info básica de la sala (para mostrar nombres/estados)
     estado_sala = {}
@@ -385,6 +386,7 @@ async def cliente():
                         ganador_id = None
                         motivo_victoria = None
                         yo_listo = False
+                        necesita_sincronizar_posicion_inicial = False
                         jugadores_danados = {}
                         estrella_pos = None
                         jugadores_invencibles = {}
@@ -560,18 +562,27 @@ async def cliente():
                             jugadores_recibidos_raw = datos.get("jugadores", {})
                             jugadores_recibidos = {int(pid): pos for pid, pos in jugadores_recibidos_raw.items()}
 
-                            # Sincronizar solo si hay respawn
+                            # Sincronizar posición del jugador local con el servidor
                             if player_id is not None and player_id in jugadores_recibidos:
                                 pos_servidor = jugadores_recibidos[player_id]
                                 servidor_x = pos_servidor["x"]
                                 servidor_y = pos_servidor["y"]
 
                                 dist_respawn = math.sqrt((x - servidor_x) ** 2 + (y - servidor_y) ** 2)
-                                if dist_respawn > 50:
-                                    print(
-                                        f"Respawn/corrección detectado! "
-                                        f"({x}, {y}) -> ({servidor_x}, {servidor_y})"
-                                    )
+                                # Sincronizar si hay diferencia significativa (respawn/corrección)
+                                # O si acabamos de iniciar la partida (necesitamos sincronizar posición inicial)
+                                if dist_respawn > 50 or necesita_sincronizar_posicion_inicial:
+                                    if necesita_sincronizar_posicion_inicial:
+                                        print(
+                                            f"Sincronizando posición inicial al iniciar partida: "
+                                            f"({x}, {y}) -> ({servidor_x}, {servidor_y})"
+                                        )
+                                        necesita_sincronizar_posicion_inicial = False
+                                    else:
+                                        print(
+                                            f"Respawn/corrección detectado! "
+                                            f"({x}, {y}) -> ({servidor_x}, {servidor_y})"
+                                        )
                                     x = servidor_x
                                     y = servidor_y
                                     posicion_anterior = (x, y)
@@ -691,6 +702,8 @@ async def cliente():
                             game_over = False
                             print("¡Comienza la partida!")
                             puede_disparar = True
+                            # Marcar que necesitamos sincronizar la posición inicial
+                            necesita_sincronizar_posicion_inicial = True
 
                         # --- Game over ---
                         elif tipo_msg == "game_over":

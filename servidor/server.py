@@ -485,11 +485,14 @@ async def manejar_cliente(websocket: Any):
                     print(f"Jugador se unió - Código: {codigo_ingresado}, Nombre: {nombre} (ID: {player_id}, Sprite: {sprite_index})")
                     
                     # Asignar posición inicial diferente según el número de jugadores en esta sala
+                    # Evitar obstáculos: barril en (400, 300), cactus en (400, 100), etc.
                     num_jugadores = len(sala["jugadores"])
                     if num_jugadores == 2:
                         spawn_x, spawn_y = 600, 300
+                    elif num_jugadores == 3:
+                        spawn_x, spawn_y = 400, 450  # Esquina inferior, lejos de obstáculos
                     else:
-                        spawn_x, spawn_y = 400, 300
+                        spawn_x, spawn_y = 400, 450  # Para 4+ jugadores también
                     
                     sala["estado"][player_id] = {"x": spawn_x, "y": spawn_y}
                     
@@ -595,14 +598,35 @@ async def manejar_cliente(websocket: Any):
                             continue
                         
                         # Resetear puntuación y posiciones en esta sala
+                        # Distribuir posiciones iniciales de manera equilibrada
+                        num_jugadores = len(ids_actuales)
                         for idx, pid in enumerate(ids_actuales):
                             sala["puntuacion"][pid] = 0
-                            if idx == 0:
-                                sala["estado"][pid] = {"x": 200, "y": 300}
-                            elif idx == 1:
-                                sala["estado"][pid] = {"x": 600, "y": 300}
-                            else:
-                                sala["estado"][pid] = {"x": 400, "y": 300}
+                            # Distribuir jugadores en diferentes posiciones según el número total
+                            if num_jugadores == 2:
+                                if idx == 0:
+                                    sala["estado"][pid] = {"x": 200, "y": 300}
+                                else:
+                                    sala["estado"][pid] = {"x": 600, "y": 300}
+                            elif num_jugadores == 3:
+                                if idx == 0:
+                                    sala["estado"][pid] = {"x": 200, "y": 300}
+                                elif idx == 1:
+                                    sala["estado"][pid] = {"x": 600, "y": 300}
+                                else:
+                                    # Tercer jugador: esquina inferior, lejos de obstáculos
+                                    sala["estado"][pid] = {"x": 400, "y": 450}
+                            else:  # 4 o más jugadores
+                                if idx == 0:
+                                    sala["estado"][pid] = {"x": 200, "y": 300}
+                                elif idx == 1:
+                                    sala["estado"][pid] = {"x": 600, "y": 300}
+                                elif idx == 2:
+                                    # Evitar cactus en (150, 150) - poner más abajo
+                                    sala["estado"][pid] = {"x": 200, "y": 450}
+                                else:
+                                    # Evitar cactus en (650, 450) - poner más arriba
+                                    sala["estado"][pid] = {"x": 600, "y": 150}
                         
                         # Limpiar balas y estrellas de esta sala
                         sala["balas"].clear()
@@ -713,11 +737,16 @@ async def manejar_cliente(websocket: Any):
                     y = datos.get("y")
                     
                     # Verificar si el jugador está registrado en esta sala
-                    if websocket in sala["jugadores_info"] and sala["jugadores_info"][websocket]["id"] == player_id:
-                        # Actualizar el estado del jugador en esta sala
-                        sala["estado"][player_id] = {"x": x, "y": y}
+                    if websocket in sala["jugadores_info"]:
+                        info_jugador = sala["jugadores_info"][websocket]
+                        if info_jugador["id"] == player_id:
+                            # Actualizar el estado del jugador en esta sala
+                            sala["estado"][player_id] = {"x": x, "y": y}
+                        else:
+                            print(f"⚠️ Posición recibida con ID incorrecto. WebSocket tiene ID {info_jugador['id']}, pero mensaje dice {player_id}")
                     else:
-                        print(f"Posición recibida de jugador no registrado o ID incorrecto (ID: {player_id}): ({x}, {y})")
+                        print(f"⚠️ Posición recibida de websocket no registrado en sala {codigo_sala} (ID: {player_id}): ({x}, {y})")
+                        print(f"   Jugadores registrados: {list(sala['jugadores_info'].keys())}")
                     
                 else:
                     # Para otros tipos de mensajes, reenviar a todos los jugadores de la misma sala
